@@ -5,5 +5,17 @@
 *.pem
 secrets/
 node_modules/
+.pnpm-store/
 .next/
+out/
 dist/
+coverage/
+playwright-report/
+test-results/
+*.log
+*.tsbuildinfo
+.DS_Store
+Thumbs.db
+.vercel/
+.turbo/
+.superpowers/
