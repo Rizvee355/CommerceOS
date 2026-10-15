@@ -7,7 +7,7 @@
 - Do not silently replace absent financial values with zero.
 - Do not use floating-point arithmetic for money.
 - Mark synthetic fixtures and mock provenance explicitly.
-- Refuse mock mode in production by default.
+- Require explicit `disabled` inference mode for the G2 production shell and refuse mock mode in production.
 - Run secret and dependency checks before merge.
 
 ## Dependency audit scope

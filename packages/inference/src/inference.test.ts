@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   createInferenceProvider,
   DeterministicMockProvider,
+  initializeInferenceFromEnvironment,
   InferenceProviderError,
 } from "./index";
 
@@ -67,35 +68,69 @@ describe("DeterministicMockProvider", () => {
   });
 });
 
-describe("provider selection", () => {
-  it("selects mock explicitly outside production", () => {
+describe("runtime provider configuration", () => {
+  it("accepts explicit disabled mode in production", () => {
     expect(
-      createInferenceProvider({
-        provider: "mock",
-        environment: "test",
+      initializeInferenceFromEnvironment({
+        INFERENCE_PROVIDER: "disabled",
+        NODE_ENV: "production",
       }),
-    ).toBeInstanceOf(DeterministicMockProvider);
+    ).toBeNull();
   });
 
-  it("refuses mock mode in production by default", () => {
+  it.each(["development", "test"] as const)(
+    "accepts explicit mock mode in %s",
+    (environment) => {
+      expect(
+        initializeInferenceFromEnvironment({
+          INFERENCE_PROVIDER: "mock",
+          NODE_ENV: environment,
+        }),
+      ).toBeInstanceOf(DeterministicMockProvider);
+    },
+  );
+
+  it("rejects explicit mock mode in production", () => {
     expect(() =>
-      createInferenceProvider({
-        provider: "mock",
-        environment: "production",
+      initializeInferenceFromEnvironment({
+        INFERENCE_PROVIDER: "mock",
+        NODE_ENV: "production",
       }),
     ).toThrowError(
       expect.objectContaining({ code: "MOCK_FORBIDDEN_IN_PRODUCTION" }),
     );
   });
 
-  it("does not fall back when AMD is selected but not activated", () => {
+  it("rejects unactivated AMD without falling back to mock", () => {
     expect(() =>
-      createInferenceProvider({
-        provider: "amd-token-factory",
-        environment: "development",
+      initializeInferenceFromEnvironment({
+        INFERENCE_PROVIDER: "amd-token-factory",
+        NODE_ENV: "development",
       }),
     ).toThrowError(
       expect.objectContaining({ code: "LIVE_PROVIDER_NOT_ACTIVATED" }),
+    );
+  });
+
+  it.each([undefined, "unexpected-provider"])(
+    "rejects invalid provider configuration %s",
+    (provider) => {
+      expect(() =>
+        initializeInferenceFromEnvironment({
+          INFERENCE_PROVIDER: provider,
+          NODE_ENV: "development",
+        }),
+      ).toThrowError(
+        expect.objectContaining({ code: "INVALID_PROVIDER_CONFIGURATION" }),
+      );
+    },
+  );
+
+  it("keeps the typed factory fail-closed for production mock", () => {
+    expect(() =>
+      createInferenceProvider({ provider: "mock", environment: "production" }),
+    ).toThrowError(
+      expect.objectContaining({ code: "MOCK_FORBIDDEN_IN_PRODUCTION" }),
     );
   });
 

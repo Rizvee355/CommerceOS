@@ -12,6 +12,9 @@ export default defineConfig({
   },
   webServer: {
     command: "pnpm --filter @commerceos/app start --hostname 127.0.0.1",
+    env: {
+      INFERENCE_PROVIDER: "disabled",
+    },
     url: "http://127.0.0.1:3000/api/v1/health",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

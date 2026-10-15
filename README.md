@@ -32,7 +32,8 @@ The application runs at `http://localhost:3000`. Health and capability metadata 
 ## Safety boundaries
 
 - Never commit secrets or put inference credentials in browser-visible variables.
-- CI uses only the deterministic mock and never calls AMD.
+- CI makes no live provider calls; tests use deterministic mock or explicitly disabled inference.
+- Production starts only with inference explicitly `disabled` during G2; mock mode is limited to development and test.
 - Live AMD integration remains inactive until authenticated Token Factory proof and a separately approved adapter implementation.
 - Shared contracts and inference infrastructure are foundation-owned; product agents submit contract change requests rather than editing those paths independently.
 - Verify public GitHub visibility and repository history before hackathon submission.

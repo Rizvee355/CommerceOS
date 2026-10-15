@@ -3,6 +3,7 @@ import { type ZodType } from "zod";
 
 export type InferenceErrorCode =
   | "INVALID_MOCK_SCENARIO"
+  | "INVALID_PROVIDER_CONFIGURATION"
   | "LIVE_PROVIDER_NOT_ACTIVATED"
   | "MALFORMED_OUTPUT"
   | "MOCK_FORBIDDEN_IN_PRODUCTION"
@@ -160,8 +161,13 @@ export class DeterministicMockProvider implements InferenceProvider {
 }
 
 export type ProviderSelection = {
-  provider: "mock" | "amd-token-factory";
+  provider: "disabled" | "mock" | "amd-token-factory";
   environment: "development" | "test" | "production";
+};
+
+export type InferenceEnvironment = {
+  INFERENCE_PROVIDER?: string;
+  NODE_ENV?: string;
 };
 
 export type AmdTokenFactoryBoundary = {
@@ -178,7 +184,11 @@ export const amdTokenFactoryBoundary: AmdTokenFactoryBoundary = {
 
 export const createInferenceProvider = (
   selection: ProviderSelection,
-): InferenceProvider => {
+): InferenceProvider | null => {
+  if (selection.provider === "disabled") {
+    return null;
+  }
+
   if (selection.provider === "amd-token-factory") {
     throw new InferenceProviderError(
       "LIVE_PROVIDER_NOT_ACTIVATED",
@@ -196,4 +206,39 @@ export const createInferenceProvider = (
   }
 
   return new DeterministicMockProvider();
+};
+
+export const initializeInferenceFromEnvironment = (
+  environment: InferenceEnvironment,
+): InferenceProvider | null => {
+  const runtimeEnvironment = environment.NODE_ENV;
+  if (
+    runtimeEnvironment !== "development" &&
+    runtimeEnvironment !== "test" &&
+    runtimeEnvironment !== "production"
+  ) {
+    throw new InferenceProviderError(
+      "INVALID_PROVIDER_CONFIGURATION",
+      "The runtime environment is not supported.",
+      false,
+    );
+  }
+
+  const provider = environment.INFERENCE_PROVIDER;
+  if (
+    provider !== "disabled" &&
+    provider !== "mock" &&
+    provider !== "amd-token-factory"
+  ) {
+    throw new InferenceProviderError(
+      "INVALID_PROVIDER_CONFIGURATION",
+      "The inference provider configuration is invalid.",
+      false,
+    );
+  }
+
+  return createInferenceProvider({
+    provider,
+    environment: runtimeEnvironment,
+  });
 };
