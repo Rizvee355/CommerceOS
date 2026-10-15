@@ -9,4 +9,4 @@
 7. Redact API key, Authorization header, cookies, account IDs and sensitive URLs before storing evidence.
 8. Mark authenticated inference G0 PASS only when an authorized request succeeds and yields actual model-generated content.
 
-Current status (2026-10-14): team registration reported complete, API key not yet issued/received, inference proof BLOCKED.
+Current status (2026-10-15): team registration reported complete, API key not yet issued/received, inference proof BLOCKED. Mission G2 performs no live AMD calls.

@@ -1,0 +1,9 @@
+# Replace the repository owner with team handles when collaborators are added.
+* @Rizvee355
+
+# G2 shared foundation paths have a single owner.
+/.github/ @Rizvee355
+/apps/commerceos/src/server/ @Rizvee355
+/packages/contracts/ @Rizvee355
+/packages/inference/ @Rizvee355
+/scripts/ @Rizvee355
