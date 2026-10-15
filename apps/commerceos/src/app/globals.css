@@ -601,6 +601,50 @@ li[data-tone="waiting"] .rail-dot {
   gap: 36px;
 }
 
+/* Clock Sync States */
+.pg-clock-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 16px 20px;
+  background: var(--risk-soft);
+  border: 1px solid var(--risk);
+  border-radius: var(--radius);
+}
+
+.pg-clock-error-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pg-clock-error-title {
+  color: var(--risk);
+  font-size: 0.95rem;
+}
+
+.pg-clock-error-msg {
+  margin: 0;
+  color: var(--ink-700);
+  font-size: 0.88rem;
+}
+
+.pg-clock-syncing {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 24px;
+  background: var(--surface);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  color: var(--ink-500);
+  font-family: var(--utility);
+  font-size: 0.9rem;
+  justify-content: center;
+}
+
 /* Section Intros */
 .pg-section-intro {
   margin-bottom: 18px;
@@ -636,6 +680,7 @@ li[data-tone="waiting"] .rail-dot {
 }
 
 .pg-scenario-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -653,9 +698,30 @@ li[data-tone="waiting"] .rail-dot {
   font-family: inherit;
 }
 
-.pg-scenario-card:hover:not(:disabled) {
+.pg-scenario-card-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.pg-scenario-card-input:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.pg-scenario-card:hover:not(.is-disabled):not(:disabled) {
   border-color: var(--line-strong);
   box-shadow: var(--shadow);
+}
+
+.pg-scenario-card:focus-within {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
 }
 
 .pg-scenario-card.is-selected {
@@ -665,7 +731,8 @@ li[data-tone="waiting"] .rail-dot {
   padding: 21px;
 }
 
-.pg-scenario-card:disabled {
+.pg-scenario-card:disabled,
+.pg-scenario-card.is-disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
@@ -1476,6 +1543,12 @@ li[data-tone="waiting"] .rail-dot {
 .pg-status-tag[data-tone="preview"] {
   background: var(--waiting-soft);
   color: var(--waiting);
+}
+
+.pg-status-tag[data-tone="neutral"] {
+  background: var(--surface-subtle, rgba(0, 0, 0, 0.05));
+  color: var(--ink-700);
+  border: 1px solid var(--line);
 }
 
 .pg-status-tag[data-state="disabled"] {

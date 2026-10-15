@@ -48,7 +48,23 @@ export const AiPanel = ({ inference, aiRecommendation }: AiPanelProps) => {
     );
   }
 
-  const isMock = inference.provenance === "synthetic_mock";
+  const isSynthetic = inference.provenance === "synthetic_mock";
+  const isAuthorizedAmd =
+    !isSynthetic &&
+    (inference.providerId === "amd-token-factory" ||
+      inference.providerId.startsWith("amd-"));
+
+  const providerLabel = isSynthetic
+    ? "Synthetic Mock"
+    : isAuthorizedAmd
+      ? "AMD Instinct Accelerated"
+      : "Live Inference Provider";
+
+  const providerTone = isSynthetic
+    ? "preview"
+    : isAuthorizedAmd
+      ? "ready"
+      : "neutral";
 
   return (
     <section
@@ -57,11 +73,8 @@ export const AiPanel = ({ inference, aiRecommendation }: AiPanelProps) => {
     >
       <div className="pg-section-intro">
         <div className="pg-ai-status-row">
-          <span
-            className="pg-status-tag"
-            data-tone={isMock ? "preview" : "ready"}
-          >
-            {isMock ? "Synthetic Mock" : "AMD Instinct Accelerated"}
+          <span className="pg-status-tag" data-tone={providerTone}>
+            {providerLabel}
           </span>
           <span className="pg-ai-runtime-spec">
             {inference.providerId} • {inference.modelId} •{" "}

@@ -28,11 +28,11 @@ export const ProvenanceFooter = ({ response }: ProvenanceFooterProps) => {
     >
       <div className="pg-section-intro">
         <h3 id="pg-provenance-heading" className="pg-section-title">
-          Audit & Provenance Record
+          Session Execution Metadata
         </h3>
         <p className="pg-section-hint">
-          Immutable execution trace and governance versions for compliance and
-          reproducibility.
+          Ephemeral execution trace and contract schema versions returned for
+          this evaluation request. Results are not persisted.
         </p>
       </div>
 

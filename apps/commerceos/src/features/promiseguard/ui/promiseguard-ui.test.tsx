@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createPromiseGuardPreset } from "../domain/presets";
 import { AiPanel } from "./ai-panel";
@@ -16,6 +16,10 @@ import { ScenarioPicker } from "./scenario-picker";
 describe("PromiseGuard UI components", () => {
   const asOf = new Date("2026-10-15T12:00:00.000Z");
   const supportedReq = createPromiseGuardPreset("supported", asOf);
+
+  afterEach(() => {
+    cleanup();
+  });
 
   it("renders AssessmentBanner with truthful status and disclaimer", () => {
     const mockDeterministic = {
@@ -137,6 +141,50 @@ describe("PromiseGuard UI components", () => {
     expect(
       screen.getByText("Double check warehouse reservation."),
     ).toBeInTheDocument();
+  });
+
+  it("renders AiPanel with AMD Instinct branding when provenance identifies authorized AMD provider", () => {
+    render(
+      <AiPanel
+        inference={{
+          status: "available",
+          providerId: "amd-token-factory",
+          modelId: "meta/llama-3-70b-instruct",
+          adapterVersion: "1.0",
+          generatedAt: "2026-10-15T12:00:00.000Z",
+          durationMs: 88,
+          provenance: "live",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("AMD Instinct Accelerated")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Live Inference Provider"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Synthetic Mock")).not.toBeInTheDocument();
+  });
+
+  it("renders AiPanel with neutral branding for unknown or other live providers", () => {
+    render(
+      <AiPanel
+        inference={{
+          status: "available",
+          providerId: "custom-cloud-inference",
+          modelId: "generic-v1",
+          adapterVersion: "1.0",
+          generatedAt: "2026-10-15T12:00:00.000Z",
+          durationMs: 95,
+          provenance: "live",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Live Inference Provider")).toBeInTheDocument();
+    expect(
+      screen.queryByText("AMD Instinct Accelerated"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Synthetic Mock")).not.toBeInTheDocument();
   });
 
   it("renders FindingsList and triggers onFocusField when action button is clicked", () => {

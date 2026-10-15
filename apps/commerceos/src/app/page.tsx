@@ -24,8 +24,9 @@ export default function HomePage() {
             <h1>Commerce intelligence, one system.</h1>
             <p className="hero-summary">
               A unified, contract-first foundation for operational commerce
-              decisions. Product analysis remains intentionally inactive until
-              its requirements pass Control Room review.
+              decisions. A functional synthetic preview is available for
+              PromiseGuard while production activation and live AMD inference
+              remain pending.
             </p>
           </div>
 
@@ -93,10 +94,11 @@ export default function HomePage() {
               —
             </span>
             <div>
-              <h2>No product analysis yet</h2>
+              <h2>Synthetic preview available</h2>
               <p>
-                There are no verdicts, metrics, histories, or commercial
-                workflows in the approved skeleton.
+                PromiseGuard features a functional backend evaluator and
+                synthetic preview route. Production activation, live AMD
+                inference, and persistent workflows remain pending.
               </p>
             </div>
           </article>

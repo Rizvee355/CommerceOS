@@ -15,10 +15,11 @@ export const ScenarioPicker = ({
   disabled = false,
 }: ScenarioPickerProps) => {
   return (
-    <section
-      aria-labelledby="pg-scenarios-heading"
+    <fieldset
       className="pg-scenario-section"
+      aria-labelledby="pg-scenarios-heading"
     >
+      <legend className="sr-only">Select a Synthetic Scenario</legend>
       <div className="pg-section-intro">
         <h2 id="pg-scenarios-heading" className="pg-section-title">
           1. Select a Synthetic Scenario
@@ -36,16 +37,23 @@ export const ScenarioPicker = ({
       >
         {scenarioOptions.map((scenario) => {
           const isSelected = selectedId === scenario.id;
+          const inputId = `preset-${scenario.id}`;
           return (
-            <button
+            <label
               key={scenario.id}
-              type="button"
-              role="radio"
-              aria-checked={isSelected}
-              disabled={disabled}
-              className={`pg-scenario-card ${isSelected ? "is-selected" : ""}`}
-              onClick={() => onSelect(scenario.id)}
+              htmlFor={inputId}
+              className={`pg-scenario-card ${isSelected ? "is-selected" : ""} ${disabled ? "is-disabled" : ""}`}
             >
+              <input
+                type="radio"
+                id={inputId}
+                name="scenario-preset"
+                value={scenario.id}
+                checked={isSelected}
+                disabled={disabled}
+                onChange={() => onSelect(scenario.id)}
+                className="pg-scenario-card-input"
+              />
               <div className="pg-scenario-card-header">
                 <span className="pg-scenario-ordinal">
                   Preset {scenario.ordinal}
@@ -60,10 +68,10 @@ export const ScenarioPicker = ({
                 <span className="pg-scenario-intent-label">Design intent:</span>{" "}
                 {scenario.intent}
               </div>
-            </button>
+            </label>
           );
         })}
       </div>
-    </section>
+    </fieldset>
   );
 };
