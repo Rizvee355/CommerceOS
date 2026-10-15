@@ -2,11 +2,11 @@
 
 CommerceOS is one unified commerce-intelligence application prepared for the AMD Developer Hackathon ACT III. Its product modules remain gated:
 
-- PromiseGuard — core product; foundation stub only.
+- PromiseGuard — synthetic-only backend under Control Room review; capability remains a UI-less stub.
 - MarginLeak — secondary product; planned only.
 - RescueCart — disabled and excluded from implementation.
 
-Mission 002/G2 authorizes only the modular-monolith skeleton, shared generic contracts, inference abstraction, deterministic mock provider, governance, and automated verification. No product evaluation logic is active.
+The merged G2 foundation supplies the modular monolith, shared generic contracts, inference abstraction, deterministic mock provider, governance, and automated verification. G3B adds only the approved PromiseGuard contracts, deterministic domain evaluator, constrained local/test mock orchestration, and stateless backend route. Antigravity-owned product UX and live AMD inference are not included.
 
 ## Workspace
 
@@ -27,13 +27,13 @@ pnpm check
 pnpm dev
 ```
 
-The application runs at `http://localhost:3000`. Health and capability metadata are available at `/api/v1/health` and `/api/v1/capabilities`.
+The application runs at `http://localhost:3000`. Health and capability metadata are available at `/api/v1/health` and `/api/v1/capabilities`. The synthetic-only PromiseGuard backend is exposed at `POST /api/v1/promiseguard/analyze`; it does not make PromiseGuard an active capability until the separately owned UX and end-to-end experience are complete.
 
 ## Safety boundaries
 
 - Never commit secrets or put inference credentials in browser-visible variables.
 - CI makes no live provider calls; tests use deterministic mock or explicitly disabled inference.
-- Production starts only with inference explicitly `disabled` during G2; mock mode is limited to development and test.
+- Production starts only with inference explicitly `disabled`; mock mode is limited to development and test.
 - Live AMD integration remains inactive until authenticated Token Factory proof and a separately approved adapter implementation.
 - Shared contracts and inference infrastructure are foundation-owned; product agents submit contract change requests rather than editing those paths independently.
 - Verify public GitHub visibility and repository history before hackathon submission.
