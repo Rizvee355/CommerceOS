@@ -13,6 +13,8 @@ import {
   humanReviewMetadataSchema,
   inferenceMetadataSchema,
   moneySchema,
+  promiseGuardEvaluationRequestSchema,
+  promiseGuardEvaluationResponseSchema,
   requestMetadataSchema,
   responseMetadataSchema,
   scenarioRefSchema,
@@ -28,6 +30,8 @@ const schemaDefinitions = {
   HumanReviewMetadata: humanReviewMetadataSchema,
   InferenceMetadata: inferenceMetadataSchema,
   Money: moneySchema,
+  PromiseGuardEvaluationRequest: promiseGuardEvaluationRequestSchema,
+  PromiseGuardEvaluationResponse: promiseGuardEvaluationResponseSchema,
   RequestMetadata: requestMetadataSchema,
   ResponseMetadata: responseMetadataSchema,
   ScenarioRef: scenarioRefSchema,
@@ -43,6 +47,9 @@ const fileNames: Record<keyof typeof schemaDefinitions, string> = {
   HumanReviewMetadata: "human-review-metadata.schema.json",
   InferenceMetadata: "inference-metadata.schema.json",
   Money: "money.schema.json",
+  PromiseGuardEvaluationRequest: "promiseguard-evaluation-request.schema.json",
+  PromiseGuardEvaluationResponse:
+    "promiseguard-evaluation-response.schema.json",
   RequestMetadata: "request-metadata.schema.json",
   ResponseMetadata: "response-metadata.schema.json",
   ScenarioRef: "scenario-ref.schema.json",
@@ -74,10 +81,10 @@ export const createArtifacts = (): Map<string, unknown> => {
   artifacts.set("openapi/openapi.json", {
     openapi: "3.1.0",
     info: {
-      title: "CommerceOS Foundation API",
+      title: "CommerceOS API",
       version: "1.0.0",
       description:
-        "Approved G2 skeleton endpoints only. No product analysis endpoints are defined.",
+        "CommerceOS foundation endpoints and the approved synthetic-only PromiseGuard analysis operation.",
     },
     paths: {
       "/api/v1/capabilities": {
@@ -112,8 +119,53 @@ export const createArtifacts = (): Map<string, unknown> => {
           },
         },
       },
+      "/api/v1/promiseguard/analyze": {
+        post: {
+          operationId: "analyzePromiseGuard",
+          summary: "Evaluate synthetic dispatch-readiness evidence",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  $ref: "#/components/schemas/PromiseGuardEvaluationRequest",
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "PromiseGuard evaluation",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/PromiseGuardEvaluationResponse",
+                  },
+                },
+              },
+            },
+            "400": { $ref: "#/components/responses/ErrorResponse" },
+            "413": { $ref: "#/components/responses/ErrorResponse" },
+            "415": { $ref: "#/components/responses/ErrorResponse" },
+            "422": { $ref: "#/components/responses/ErrorResponse" },
+            "500": { $ref: "#/components/responses/ErrorResponse" },
+          },
+        },
+      },
     },
-    components: { schemas: components },
+    components: {
+      schemas: components,
+      responses: {
+        ErrorResponse: {
+          description: "Sanitized CommerceOS error",
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" },
+            },
+          },
+        },
+      },
+    },
   });
 
   return artifacts;
