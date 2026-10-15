@@ -89,6 +89,37 @@ describe("POST /api/v1/promiseguard/analyze", () => {
     expect((await response.json()).error.code).toBe("PAYLOAD_TOO_LARGE");
   });
 
+  it("cancels an undeclared streamed body as soon as it exceeds 16 KiB", async () => {
+    let pulls = 0;
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1;
+        controller.enqueue(new Uint8Array(8 * 1024));
+        if (pulls === 64) controller.close();
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const request = new Request(
+      "http://localhost/api/v1/promiseguard/analyze",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body,
+        duplex: "half",
+      } as RequestInit & { duplex: "half" },
+    );
+
+    const response =
+      await createPromiseGuardAnalyzeHandler(dependencies())(request);
+
+    expect(response.status).toBe(413);
+    expect(cancelled).toBe(true);
+    expect(pulls).toBeLessThan(64);
+  });
+
   it("sanitizes unexpected provider failures", async () => {
     const provider: InferenceProvider = {
       providerId: "failing-provider",

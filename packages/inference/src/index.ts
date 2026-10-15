@@ -54,7 +54,12 @@ export interface InferenceProvider {
 }
 
 type Fixture =
-  | { kind: "output"; value: Readonly<Record<string, unknown>> }
+  | {
+      kind: "output";
+      value: Readonly<Record<string, unknown>>;
+      expectedAssessment?: "supported" | "at_risk" | "indeterminate";
+      expectedFindingCodes?: readonly string[];
+    }
   | {
       kind: "error";
       code: InferenceErrorCode;
@@ -95,6 +100,13 @@ const fixtures: Readonly<Record<string, Fixture>> = {
   },
   "pg-supported": {
     kind: "output",
+    expectedAssessment: "supported",
+    expectedFindingCodes: [
+      "DISPATCH_DEADLINE_OPEN",
+      "INVENTORY_SECURED",
+      "NO_ACTIVE_BLOCKERS",
+      "READY_ESTIMATE_WITHIN_DEADLINE",
+    ],
     value: {
       data: {
         operationalSummary:
@@ -108,6 +120,14 @@ const fixtures: Readonly<Record<string, Fixture>> = {
   },
   "pg-at-risk": {
     kind: "output",
+    expectedAssessment: "at_risk",
+    expectedFindingCodes: [
+      "ACTIVE_BLOCKER_REPORTED",
+      "DISPATCH_DEADLINE_OPEN",
+      "FULFILLMENT_BLOCKED",
+      "INVENTORY_NOT_SECURED",
+      "READY_ESTIMATE_AFTER_DEADLINE",
+    ],
     value: {
       data: {
         operationalSummary:
@@ -155,6 +175,13 @@ const fixtures: Readonly<Record<string, Fixture>> = {
   },
   "pg-indeterminate": {
     kind: "output",
+    expectedAssessment: "indeterminate",
+    expectedFindingCodes: [
+      "DISPATCH_DEADLINE_OPEN",
+      "MISSING_READY_ESTIMATE",
+      "UNKNOWN_EVIDENCE_VALIDITY",
+      "UNKNOWN_EVIDENCE_VALIDITY",
+    ],
     value: {
       data: {
         operationalSummary:
@@ -245,6 +272,40 @@ export class DeterministicMockProvider implements InferenceProvider {
         fixture.message,
         fixture.retryable,
       );
+    }
+
+    if (
+      fixture.expectedAssessment &&
+      request.input.assessment !== fixture.expectedAssessment
+    ) {
+      throw new InferenceProviderError(
+        "MALFORMED_OUTPUT",
+        "The synthetic fixture does not match the deterministic assessment.",
+        false,
+      );
+    }
+
+    if (fixture.expectedFindingCodes) {
+      const actualFindingCodes = request.input.findingCodes;
+      const expected = [...fixture.expectedFindingCodes].sort();
+      const actual = Array.isArray(actualFindingCodes)
+        ? actualFindingCodes.filter(
+            (findingCode): findingCode is string =>
+              typeof findingCode === "string",
+          )
+        : [];
+      if (
+        actual.length !== expected.length ||
+        actual
+          .sort()
+          .some((findingCode, index) => findingCode !== expected[index])
+      ) {
+        throw new InferenceProviderError(
+          "MALFORMED_OUTPUT",
+          "The synthetic fixture does not match the deterministic findings.",
+          false,
+        );
+      }
     }
 
     const parsed = outputSchema.safeParse(fixture.value);

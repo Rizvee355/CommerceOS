@@ -17,6 +17,51 @@ export const runtime = "nodejs";
 
 const MAX_REQUEST_BYTES = 16 * 1024;
 
+type BodyReadResult =
+  | { status: "ok"; text: string }
+  | { status: "too_large" }
+  | { status: "read_error" };
+
+const readRequestBody = async (request: Request): Promise<BodyReadResult> => {
+  if (!request.body) return { status: "ok", text: "" };
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_REQUEST_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        return { status: "too_large" };
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return { status: "read_error" };
+  } finally {
+    reader.releaseLock();
+  }
+
+  const body = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try {
+    return {
+      status: "ok",
+      text: new TextDecoder("utf-8", { fatal: true }).decode(body),
+    };
+  } catch {
+    return { status: "read_error" };
+  }
+};
+
 export type PromiseGuardRouteDependencies = ServerContextFactory & {
   getInferenceProvider: () => InferenceProvider | null;
 };
@@ -78,10 +123,8 @@ export const createPromiseGuardAnalyzeHandler =
       );
     }
 
-    let text: string;
-    try {
-      text = await request.text();
-    } catch {
+    const body = await readRequestBody(request);
+    if (body.status === "read_error") {
       return errorResponse(
         400,
         {
@@ -93,8 +136,7 @@ export const createPromiseGuardAnalyzeHandler =
         dependencies,
       );
     }
-
-    if (Buffer.byteLength(text, "utf8") > MAX_REQUEST_BYTES) {
+    if (body.status === "too_large") {
       return errorResponse(
         413,
         {
@@ -109,7 +151,7 @@ export const createPromiseGuardAnalyzeHandler =
 
     let input: unknown;
     try {
-      input = JSON.parse(text);
+      input = JSON.parse(body.text);
     } catch {
       return errorResponse(
         400,

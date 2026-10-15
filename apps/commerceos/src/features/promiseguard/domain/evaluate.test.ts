@@ -142,6 +142,23 @@ describe("PromiseGuard deterministic evaluator", () => {
     expect(codes(expired)).not.toContain("READY_ESTIMATE_WITHIN_DEADLINE");
   });
 
+  it("does not treat an elapsed estimate as adverse without current unfinished fulfillment evidence", () => {
+    const request = supportedRequest();
+    request.operationalEvidence.fulfillmentState.validUntil =
+      "2026-10-15T09:00:00.000Z";
+    request.operationalEvidence.readyTimeEstimate!.estimatedReadyAt =
+      "2026-10-15T08:59:59.999Z";
+
+    const result = evaluatePromiseGuard(request, asOf);
+    const estimateFinding = result.deterministic.data.findings.find(
+      ({ code }) => code === "READY_ESTIMATE_ELAPSED",
+    );
+
+    expect(result.deterministic.data.assessment).toBe("indeterminate");
+    expect(result.deterministic.data.derived.readyByDeadline).toBeNull();
+    expect(estimateFinding?.impact).toBe("uncertain");
+  });
+
   it("accepts a current readiness estimate exactly at the dispatch deadline", () => {
     const request = supportedRequest();
     request.operationalEvidence.readyTimeEstimate!.estimatedReadyAt =

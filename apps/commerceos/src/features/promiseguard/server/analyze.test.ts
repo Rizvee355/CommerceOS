@@ -181,6 +181,110 @@ describe("PromiseGuard analysis orchestration", () => {
     expect(response).not.toHaveProperty("aiRecommendation");
   });
 
+  it("fails closed when a registered mock scenario no longer matches edited facts", async () => {
+    const request = createPromiseGuardPreset("supported", receivedAt);
+    request.operationalEvidence.inventoryAllocation.status = "not_secured";
+
+    const response = await analyzePromiseGuard(
+      request,
+      dependencies(new DeterministicMockProvider()),
+    );
+
+    expect(response.deterministic.data.assessment).toBe("at_risk");
+    expect(response.analysisStatus).toBe("limited");
+    expect(response.inference).toMatchObject({
+      status: "unavailable",
+      reasonCode: "malformed_output",
+    });
+    expect(response).not.toHaveProperty("aiRecommendation");
+  });
+
+  it("fails closed when edited facts retain the fixture assessment but change its factual basis", async () => {
+    const request = createPromiseGuardPreset("supported", receivedAt);
+    request.operationalEvidence.fulfillmentState.state = "ready";
+
+    const response = await analyzePromiseGuard(
+      request,
+      dependencies(new DeterministicMockProvider()),
+    );
+
+    expect(response.deterministic.data.assessment).toBe("supported");
+    expect(response.analysisStatus).toBe("limited");
+    expect(response.inference).toMatchObject({
+      status: "unavailable",
+      reasonCode: "malformed_output",
+    });
+    expect(response).not.toHaveProperty("aiRecommendation");
+  });
+
+  it("normalizes response-level AI evidence validation instead of escaping", async () => {
+    const request = createPromiseGuardPreset("supported", receivedAt);
+    request.operationalEvidence.inventoryAllocation.evidenceId =
+      "ev-inventory-renamed";
+
+    const response = await analyzePromiseGuard(
+      request,
+      dependencies(new DeterministicMockProvider()),
+    );
+
+    expect(response.analysisStatus).toBe("limited");
+    expect(response.inference).toMatchObject({
+      status: "unavailable",
+      reasonCode: "malformed_output",
+    });
+    expect(response).not.toHaveProperty("aiRecommendation");
+  });
+
+  it("rejects action evidence that exists but is unrelated to that mitigation", async () => {
+    class MisattributedEvidenceProvider implements InferenceProvider {
+      readonly providerId = "test-misattributed-evidence";
+
+      async generateStructured<T>(
+        _request: InferenceRequest,
+        outputSchema: ZodType<T>,
+      ): Promise<InferenceResult<T>> {
+        return {
+          output: outputSchema.parse({
+            data: {
+              operationalSummary: "A blocker requires resolution.",
+              actions: [
+                {
+                  actionCode: "resolve_identified_blocker",
+                  priority: 1,
+                  explanation: "Resolve the current blocker.",
+                  evidenceIds: ["ev-inventory-002"],
+                },
+              ],
+            },
+            reasoningSummary: "The blocker finding requires action.",
+            evidenceRefs: ["ev-inventory-002"],
+          }),
+          metadata: {
+            status: "available",
+            providerId: this.providerId,
+            modelId: "test-model",
+            adapterVersion: "1.0.0",
+            generatedAt: receivedAt.toISOString(),
+            durationMs: 0,
+            provenance: "live",
+          },
+        };
+      }
+    }
+
+    const response = await analyzePromiseGuard(
+      createPromiseGuardPreset("at_risk", receivedAt),
+      dependencies(new MisattributedEvidenceProvider()),
+    );
+
+    expect(response.analysisStatus).toBe("limited");
+    expect(response.inference).toMatchObject({
+      status: "unavailable",
+      reasonCode: "malformed_output",
+    });
+    expect(response).not.toHaveProperty("aiRecommendation");
+  });
+
   it("uses the exact approved AI output contract", () => {
     expect(
       promiseGuardAiMitigationOutputSchema.safeParse({

@@ -83,6 +83,16 @@ describe("DeterministicMockProvider", () => {
       {
         ...request,
         scenario: { scenarioId: "pg-at-risk", synthetic: true },
+        input: {
+          assessment: "at_risk",
+          findingCodes: [
+            "ACTIVE_BLOCKER_REPORTED",
+            "DISPATCH_DEADLINE_OPEN",
+            "FULFILLMENT_BLOCKED",
+            "INVENTORY_NOT_SECURED",
+            "READY_ESTIMATE_AFTER_DEADLINE",
+          ],
+        },
       },
       promiseGuardAiMitigationOutputSchema,
     );

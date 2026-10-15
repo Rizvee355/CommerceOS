@@ -67,6 +67,44 @@ const validateMitigations = (
   request: PromiseGuardEvaluationRequest,
   deterministic: ReturnType<typeof evaluatePromiseGuard>["deterministic"],
 ): void => {
+  const evidenceIdsFor = (
+    actionCode: PromiseGuardActionCode,
+  ): ReadonlySet<string> => {
+    const evidence = request.operationalEvidence;
+    switch (actionCode) {
+      case "verify_inventory_allocation":
+        return new Set([evidence.inventoryAllocation.evidenceId]);
+      case "obtain_current_readiness_estimate":
+        return new Set([
+          evidence.fulfillmentState.evidenceId,
+          ...(evidence.readyTimeEstimate
+            ? [evidence.readyTimeEstimate.evidenceId]
+            : []),
+        ]);
+      case "resolve_identified_blocker":
+        return new Set([
+          evidence.blockingState.evidenceId,
+          evidence.fulfillmentState.evidenceId,
+        ]);
+      case "escalate_to_fulfillment_lead":
+        return new Set(
+          deterministic.evidenceRefs.map(({ evidenceId }) => evidenceId),
+        );
+      case "reassess_customer_facing_commitment":
+        return new Set([
+          request.commitment.evidenceId,
+          ...(evidence.readyTimeEstimate
+            ? [evidence.readyTimeEstimate.evidenceId]
+            : []),
+          ...deterministic.data.findings.flatMap((finding) =>
+            finding.impact === "adverse" && finding.trace.kind === "evidence"
+              ? finding.trace.evidenceIds
+              : [],
+          ),
+        ]);
+    }
+  };
+
   for (const action of output.data.actions) {
     if (
       !actionIsCompatible(
@@ -79,6 +117,18 @@ const validateMitigations = (
       throw new InferenceProviderError(
         "MALFORMED_OUTPUT",
         "Inference recommended an action unsupported by deterministic findings.",
+        false,
+      );
+    }
+    const allowedEvidenceIds = evidenceIdsFor(action.actionCode);
+    if (
+      action.evidenceIds.some(
+        (evidenceId) => !allowedEvidenceIds.has(evidenceId),
+      )
+    ) {
+      throw new InferenceProviderError(
+        "MALFORMED_OUTPUT",
+        "Inference action evidence was unrelated to the recommended mitigation.",
         false,
       );
     }
@@ -147,13 +197,16 @@ export const analyzePromiseGuard = async (
         input: {
           assessment: evaluation.deterministic.data.assessment,
           findings: evaluation.deterministic.data.findings,
+          findingCodes: evaluation.deterministic.data.findings.map(
+            ({ code }) => code,
+          ),
         },
       },
       promiseGuardAiMitigationOutputSchema,
     );
     validateMitigations(result.output, request, evaluation.deterministic);
 
-    return promiseGuardEvaluationResponseSchema.parse({
+    const response = promiseGuardEvaluationResponseSchema.safeParse({
       ...responseBase(),
       analysisStatus: evaluation.humanReview.required
         ? "needs_review"
@@ -161,6 +214,14 @@ export const analyzePromiseGuard = async (
       aiRecommendation: result.output,
       inference: result.metadata,
     });
+    if (!response.success) {
+      throw new InferenceProviderError(
+        "MALFORMED_OUTPUT",
+        "Inference output was incompatible with the evaluation response.",
+        false,
+      );
+    }
+    return response.data;
   } catch (error) {
     if (!(error instanceof InferenceProviderError)) throw error;
     return promiseGuardEvaluationResponseSchema.parse({

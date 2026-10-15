@@ -275,11 +275,16 @@ export const evaluatePromiseGuard = (
     if (estimateAssessment.current) {
       const estimatedReadyMs = Date.parse(estimate.estimatedReadyAt);
       if (estimatedReadyMs <= asOfMs) {
-        readyByDeadline = false;
+        const currentlyUnfinished =
+          fulfillmentAssessment.current &&
+          (fulfillment.state === "not_started" ||
+            fulfillment.state === "in_progress" ||
+            fulfillment.state === "blocked");
+        readyByDeadline = currentlyUnfinished ? false : null;
         findings.push(
           evidenceFinding(
             "READY_ESTIMATE_ELAPSED",
-            "adverse",
+            currentlyUnfinished ? "adverse" : "uncertain",
             estimate.evidenceId,
             fulfillment.evidenceId,
           ),
