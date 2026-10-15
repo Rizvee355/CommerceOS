@@ -1,5 +1,6 @@
+import { promiseGuardAiMitigationOutputSchema } from "@commerceos/contracts";
 import { z } from "zod";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   createInferenceProvider,
@@ -18,6 +19,10 @@ const request = {
   scenario: { scenarioId: "success", synthetic: true as const },
   input: { purpose: "foundation-contract-test" },
 };
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("DeterministicMockProvider", () => {
   it("returns repeatable validated synthetic output and honest provenance", async () => {
@@ -65,6 +70,28 @@ describe("DeterministicMockProvider", () => {
         outputSchema,
       ),
     ).rejects.toMatchObject({ code: "INVALID_MOCK_SCENARIO" });
+  });
+
+  it("returns a PromiseGuard mitigation fixture without any network request", async () => {
+    const network = vi.fn(() => {
+      throw new Error("The deterministic mock must not use the network.");
+    });
+    vi.stubGlobal("fetch", network);
+    const provider = new DeterministicMockProvider();
+
+    const result = await provider.generateStructured(
+      {
+        ...request,
+        scenario: { scenarioId: "pg-at-risk", synthetic: true },
+      },
+      promiseGuardAiMitigationOutputSchema,
+    );
+
+    expect(result.output.data.actions[0]?.actionCode).toBe(
+      "resolve_identified_blocker",
+    );
+    expect(result.metadata.provenance).toBe("synthetic_mock");
+    expect(network).not.toHaveBeenCalled();
   });
 });
 

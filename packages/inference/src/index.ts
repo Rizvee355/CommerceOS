@@ -93,6 +93,117 @@ const fixtures: Readonly<Record<string, Fixture>> = {
     kind: "output",
     value: { malformed: true },
   },
+  "pg-supported": {
+    kind: "output",
+    value: {
+      data: {
+        operationalSummary:
+          "Current evidence supports dispatch readiness; continue operational monitoring.",
+        actions: [],
+      },
+      reasoningSummary:
+        "Inventory is secured, no blocker is reported, and readiness is estimated within the deadline.",
+      evidenceRefs: ["ev-inventory-001", "ev-estimate-001"],
+    },
+  },
+  "pg-at-risk": {
+    kind: "output",
+    value: {
+      data: {
+        operationalSummary:
+          "Current allocation and blocking evidence require immediate operational review.",
+        actions: [
+          {
+            actionCode: "resolve_identified_blocker",
+            priority: 1,
+            explanation: "Resolve the current inventory-related blocker.",
+            evidenceIds: ["ev-blocker-002", "ev-fulfillment-002"],
+          },
+          {
+            actionCode: "verify_inventory_allocation",
+            priority: 2,
+            explanation:
+              "Verify whether inventory can be secured for this fulfillment.",
+            evidenceIds: ["ev-inventory-002"],
+          },
+          {
+            actionCode: "reassess_customer_facing_commitment",
+            priority: 3,
+            explanation:
+              "Reassess the dispatch commitment after operational review.",
+            evidenceIds: ["ev-commitment-002", "ev-estimate-002"],
+          },
+          {
+            actionCode: "escalate_to_fulfillment_lead",
+            priority: 4,
+            explanation:
+              "Escalate the combined adverse findings for human review.",
+            evidenceIds: ["ev-fulfillment-002"],
+          },
+        ],
+      },
+      reasoningSummary:
+        "Current evidence shows unsecured inventory, an active blocker, and readiness after the commitment deadline.",
+      evidenceRefs: [
+        "ev-blocker-002",
+        "ev-fulfillment-002",
+        "ev-inventory-002",
+        "ev-commitment-002",
+        "ev-estimate-002",
+      ],
+    },
+  },
+  "pg-indeterminate": {
+    kind: "output",
+    value: {
+      data: {
+        operationalSummary:
+          "Current evidence is insufficient to support the dispatch commitment.",
+        actions: [
+          {
+            actionCode: "verify_inventory_allocation",
+            priority: 1,
+            explanation: "Obtain a current inventory allocation status.",
+            evidenceIds: ["ev-inventory-003"],
+          },
+          {
+            actionCode: "obtain_current_readiness_estimate",
+            priority: 2,
+            explanation:
+              "Obtain a current readiness estimate before relying on the commitment.",
+            evidenceIds: ["ev-fulfillment-003"],
+          },
+          {
+            actionCode: "escalate_to_fulfillment_lead",
+            priority: 3,
+            explanation: "Escalate the evidence gaps for human review.",
+            evidenceIds: ["ev-inventory-003", "ev-fulfillment-003"],
+          },
+        ],
+      },
+      reasoningSummary:
+        "Inventory and blocker states are unknown and no readiness estimate is available.",
+      evidenceRefs: ["ev-inventory-003", "ev-fulfillment-003"],
+    },
+  },
+  "pg-malformed-ai": {
+    kind: "output",
+    value: {
+      data: {
+        operationalSummary: "This fixture is intentionally invalid.",
+        actions: [
+          {
+            actionCode: "guarantee_dispatch",
+            priority: 1,
+            explanation: "This action is forbidden.",
+            evidenceIds: ["ev-commitment-001"],
+          },
+        ],
+      },
+      reasoningSummary: "This output must be rejected.",
+      evidenceRefs: ["ev-commitment-001"],
+    },
+  },
 };
 
 export class DeterministicMockProvider implements InferenceProvider {
