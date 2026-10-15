@@ -6,6 +6,7 @@ import {
 import { describe, expect, it } from "vitest";
 
 import {
+  createApiErrorResponse,
   createCapabilitiesResponse,
   createErrorResponse,
   createHealthResponse,
@@ -76,5 +77,38 @@ describe("foundation API responses", () => {
       retryable: false,
     });
     expect(JSON.stringify(parsed)).not.toContain("do-not-leak");
+  });
+
+  it("creates a sanitized validation envelope with approved field paths", () => {
+    const response = createApiErrorResponse(
+      {
+        code: "INVALID_REQUEST",
+        category: "validation",
+        message: "The request did not match the PromiseGuard contract.",
+        retryable: false,
+        fieldErrors: [
+          {
+            path: "/operationalEvidence/readyTimeEstimate",
+            code: "INVALID_FIELD",
+            message: "The field is invalid.",
+          },
+        ],
+      },
+      contextFactory,
+    );
+
+    expect(errorEnvelopeSchema.parse(response).error).toEqual({
+      code: "INVALID_REQUEST",
+      category: "validation",
+      message: "The request did not match the PromiseGuard contract.",
+      retryable: false,
+      fieldErrors: [
+        {
+          path: "/operationalEvidence/readyTimeEstimate",
+          code: "INVALID_FIELD",
+          message: "The field is invalid.",
+        },
+      ],
+    });
   });
 });

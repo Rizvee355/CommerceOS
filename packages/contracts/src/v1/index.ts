@@ -1,5 +1,15 @@
 import { z } from "zod";
 
+import {
+  dispatchCommitmentSchema,
+  promiseGuardAiDataSchema,
+  promiseGuardDeterministicDataSchema,
+  promiseGuardOperationalEvidenceSchema,
+  promiseGuardOpaqueIdSchema,
+} from "./promiseguard";
+
+export * from "./promiseguard";
+
 export const SCHEMA_VERSION = "1.0" as const;
 
 const schemaVersionSchema = z.literal(SCHEMA_VERSION);
@@ -285,6 +295,151 @@ export const healthResponseSchema = z.strictObject({
   version: opaqueIdSchema,
 });
 
+export const promiseGuardEvaluationRequestSchema = z
+  .strictObject({
+    schemaVersion: schemaVersionSchema,
+    moduleId: z.literal("promiseguard"),
+    scenario: scenarioRefSchema,
+    fulfillmentRef: promiseGuardOpaqueIdSchema,
+    commitment: dispatchCommitmentSchema,
+    operationalEvidence: promiseGuardOperationalEvidenceSchema,
+  })
+  .superRefine((value, context) => {
+    if (!value.scenario.synthetic) {
+      context.addIssue({
+        code: "custom",
+        path: ["scenario", "synthetic"],
+        message: "PromiseGuard currently accepts synthetic scenarios only.",
+      });
+    }
+
+    const evidence = [
+      value.operationalEvidence.inventoryAllocation,
+      value.operationalEvidence.fulfillmentState,
+      value.operationalEvidence.blockingState,
+      value.operationalEvidence.readyTimeEstimate,
+    ].filter((item) => item !== undefined);
+    const identifiers = [
+      value.commitment.evidenceId,
+      ...evidence.map(({ evidenceId }) => evidenceId),
+    ];
+    const seen = new Set<string>();
+    identifiers.forEach((identifier, index) => {
+      if (seen.has(identifier)) {
+        context.addIssue({
+          code: "custom",
+          path:
+            index === 0
+              ? ["commitment", "evidenceId"]
+              : ["operationalEvidence"],
+          message: "Evidence identifiers must be unique within the request.",
+        });
+      }
+      seen.add(identifier);
+    });
+
+    evidence.forEach((item) => {
+      if (
+        item.validUntil !== null &&
+        Date.parse(item.validUntil) < Date.parse(item.observedAt)
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["operationalEvidence"],
+          message: "Evidence validity cannot end before it was observed.",
+        });
+      }
+    });
+  });
+
+export const promiseGuardAiMitigationOutputSchema =
+  aiRecommendationSchema.extend({
+    data: promiseGuardAiDataSchema,
+  });
+
+const promiseGuardDeterministicResultSchema = deterministicResultSchema.extend({
+  data: promiseGuardDeterministicDataSchema,
+});
+
+export const promiseGuardEvaluationResponseSchema = z
+  .strictObject({
+    schemaVersion: schemaVersionSchema,
+    moduleId: z.literal("promiseguard"),
+    analysisStatus: analysisStatusSchema,
+    metadata: responseMetadataSchema,
+    scenario: scenarioRefSchema,
+    deterministic: promiseGuardDeterministicResultSchema,
+    aiRecommendation: promiseGuardAiMitigationOutputSchema.optional(),
+    humanReview: humanReviewMetadataSchema,
+    inference: inferenceMetadataSchema,
+  })
+  .superRefine((value, context) => {
+    const generic = analysisResponseEnvelopeSchema.safeParse(value);
+    if (!generic.success) {
+      generic.error.issues.forEach((issue) => {
+        context.addIssue({
+          code: "custom",
+          path: issue.path,
+          message: issue.message,
+        });
+      });
+    }
+
+    const requiresReview = value.deterministic.data.assessment !== "supported";
+    if (
+      value.humanReview.required !== requiresReview ||
+      (requiresReview && value.humanReview.reasonCodes.length === 0)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["humanReview"],
+        message: "Human-review metadata must match the business assessment.",
+      });
+    }
+
+    if (value.inference.status === "available") {
+      const expectedStatus = requiresReview ? "needs_review" : "complete";
+      if (value.analysisStatus !== expectedStatus || !value.aiRecommendation) {
+        context.addIssue({
+          code: "custom",
+          path: ["analysisStatus"],
+          message:
+            "Available inference must produce the expected complete response.",
+        });
+      }
+    }
+
+    if (value.aiRecommendation) {
+      const deterministicEvidence = new Set(
+        value.deterministic.evidenceRefs.map(({ evidenceId }) => evidenceId),
+      );
+      const recommendationEvidence = new Set(
+        value.aiRecommendation.evidenceRefs,
+      );
+      value.aiRecommendation.data.actions.forEach((action, actionIndex) => {
+        action.evidenceIds.forEach((evidenceId, evidenceIndex) => {
+          if (
+            !deterministicEvidence.has(evidenceId) ||
+            !recommendationEvidence.has(evidenceId)
+          ) {
+            context.addIssue({
+              code: "custom",
+              path: [
+                "aiRecommendation",
+                "data",
+                "actions",
+                actionIndex,
+                "evidenceIds",
+                evidenceIndex,
+              ],
+              message: "AI action evidence must resolve to validated evidence.",
+            });
+          }
+        });
+      });
+    }
+  });
+
 export type Money = z.infer<typeof moneySchema>;
 export type ScenarioRef = z.infer<typeof scenarioRefSchema>;
 export type EvidenceRef = z.infer<typeof evidenceRefSchema>;
@@ -297,3 +452,12 @@ export type HumanReviewMetadata = z.infer<typeof humanReviewMetadataSchema>;
 export type CapabilityStatus = z.infer<typeof capabilityStatusSchema>;
 export type CapabilitiesResponse = z.infer<typeof capabilitiesResponseSchema>;
 export type HealthResponse = z.infer<typeof healthResponseSchema>;
+export type PromiseGuardEvaluationRequest = z.infer<
+  typeof promiseGuardEvaluationRequestSchema
+>;
+export type PromiseGuardAiMitigationOutput = z.infer<
+  typeof promiseGuardAiMitigationOutputSchema
+>;
+export type PromiseGuardEvaluationResponse = z.infer<
+  typeof promiseGuardEvaluationResponseSchema
+>;

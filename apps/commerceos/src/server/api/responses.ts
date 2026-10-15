@@ -46,16 +46,25 @@ export const createCapabilitiesResponse = (
     capabilities: moduleRegistry,
   });
 
-export const createErrorResponse = (
-  _error: unknown,
+export const createApiErrorResponse = (
+  error: ErrorEnvelope["error"],
   factory: ServerContextFactory = defaultContextFactory,
 ): ErrorEnvelope =>
   errorEnvelopeSchema.parse({
     ...createApiMetadata(factory),
-    error: {
+    error,
+  });
+
+export const createErrorResponse = (
+  _error: unknown,
+  factory: ServerContextFactory = defaultContextFactory,
+): ErrorEnvelope =>
+  createApiErrorResponse(
+    {
       code: "INTERNAL_ERROR",
       category: "internal",
       message: "The request could not be completed.",
       retryable: false,
     },
-  });
+    factory,
+  );
