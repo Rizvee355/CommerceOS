@@ -355,7 +355,9 @@ describe("MarginLeak v1 response contract", () => {
       netContributionVariance: null,
       leakAmount: null,
     };
-    data.categoryComparisons = [];
+    data.categoryComparisons = data.categoryComparisons.filter(
+      ({ category }) => category !== "cogs",
+    );
     data.findings = [
       {
         code: "MISSING_FINANCIAL_INPUT",
@@ -364,6 +366,10 @@ describe("MarginLeak v1 response contract", () => {
       },
     ];
     data.missingEvidencePaths = ["/financials/cogs/observed"];
+    response.deterministic.evidenceRefs =
+      response.deterministic.evidenceRefs.filter(
+        ({ factPath }) => factPath !== "/financials/cogs/observed",
+      );
 
     expect(marginLeakEvaluationResponseSchema.safeParse(response).success).toBe(
       true,
@@ -383,12 +389,31 @@ describe("MarginLeak v1 response contract", () => {
     data.assessment = "indeterminate";
     data.observationState = "provisional";
     data.totals = {
-      expectedContributionMargin: { amountMinor: 100, currency: "USD" },
-      observedContributionMargin: { amountMinor: 99, currency: "USD" },
+      expectedContributionMargin: { amountMinor: -399, currency: "USD" },
+      observedContributionMargin: { amountMinor: -400, currency: "USD" },
       netContributionVariance: { amountMinor: 1, currency: "USD" },
       leakAmount: null,
     };
+    data.categoryComparisons[0]!.expected = {
+      amountMinor: 101,
+      currency: "USD",
+    };
+    data.categoryComparisons[0]!.direction = "adverse";
+    data.categoryComparisons[0]!.varianceAmount = {
+      amountMinor: 1,
+      currency: "USD",
+    };
     data.findings = [
+      {
+        code: "ADVERSE_COMPONENT_VARIANCE",
+        impact: "adverse",
+        category: "grossItemRevenue",
+        amount: { amountMinor: 1, currency: "USD" },
+        evidenceIds: [
+          "ev-grossItemRevenue-expected",
+          "ev-grossItemRevenue-observed",
+        ],
+      },
       {
         code: "PROVISIONAL_FINANCIAL_INPUTS",
         impact: "uncertain",
@@ -462,6 +487,119 @@ describe("MarginLeak v1 response contract", () => {
     };
     expect(
       marginLeakEvaluationResponseSchema.safeParse(wrongReview).success,
+    ).toBe(false);
+  });
+
+  it("rejects contradictory aggregate and category arithmetic", () => {
+    const wrongTotal = completeResponse();
+    wrongTotal.deterministic.data.totals.expectedContributionMargin!.amountMinor =
+      -399;
+    expect(
+      marginLeakEvaluationResponseSchema.safeParse(wrongTotal).success,
+    ).toBe(false);
+
+    const wrongRole = completeResponse();
+    wrongRole.deterministic.data.categoryComparisons[0]!.role = "deduction";
+    expect(
+      marginLeakEvaluationResponseSchema.safeParse(wrongRole).success,
+    ).toBe(false);
+
+    const wrongVariance = completeResponse();
+    wrongVariance.deterministic.data.categoryComparisons[0]!.direction =
+      "adverse";
+    wrongVariance.deterministic.data.categoryComparisons[0]!.varianceAmount = {
+      amountMinor: 1,
+      currency: "USD",
+    };
+    expect(
+      marginLeakEvaluationResponseSchema.safeParse(wrongVariance).success,
+    ).toBe(false);
+  });
+
+  it("requires one correctly sourced comparison per category for complete evidence", () => {
+    const missingCategory = completeResponse();
+    missingCategory.deterministic.data.categoryComparisons.pop();
+    expect(
+      marginLeakEvaluationResponseSchema.safeParse(missingCategory).success,
+    ).toBe(false);
+
+    const duplicateCategory = completeResponse();
+    duplicateCategory.deterministic.data.categoryComparisons[7] = {
+      ...duplicateCategory.deterministic.data.categoryComparisons[0]!,
+    };
+    expect(
+      marginLeakEvaluationResponseSchema.safeParse(duplicateCategory).success,
+    ).toBe(false);
+
+    const duplicateEvidence = completeResponse();
+    duplicateEvidence.deterministic.evidenceRefs[1] = {
+      ...duplicateEvidence.deterministic.evidenceRefs[0]!,
+    };
+    expect(
+      marginLeakEvaluationResponseSchema.safeParse(duplicateEvidence).success,
+    ).toBe(false);
+
+    const wrongEvidencePath = completeResponse();
+    wrongEvidencePath.deterministic.evidenceRefs[0]!.factPath =
+      "/financials/cogs/observed";
+    expect(
+      marginLeakEvaluationResponseSchema.safeParse(wrongEvidencePath).success,
+    ).toBe(false);
+
+    const wrongEvidenceSource = completeResponse();
+    wrongEvidenceSource.deterministic.evidenceRefs[0]!.sourceKind =
+      "deterministic_rule";
+    expect(
+      marginLeakEvaluationResponseSchema.safeParse(wrongEvidenceSource).success,
+    ).toBe(false);
+  });
+
+  it("rejects findings and review reasons that contradict deterministic data", () => {
+    const wrongVarianceFinding = completeResponse();
+    wrongVarianceFinding.deterministic.data.findings = [
+      {
+        code: "ADVERSE_COMPONENT_VARIANCE",
+        impact: "favorable",
+        category: "grossItemRevenue",
+        amount: { amountMinor: 1, currency: "USD" },
+        evidenceIds: [
+          "ev-grossItemRevenue-expected",
+          "ev-grossItemRevenue-observed",
+        ],
+      },
+    ];
+    expect(
+      marginLeakEvaluationResponseSchema.safeParse(wrongVarianceFinding)
+        .success,
+    ).toBe(false);
+
+    const missingFinding = completeResponse();
+    missingFinding.analysisStatus = "needs_review";
+    missingFinding.humanReview = {
+      required: true,
+      reasonCodes: ["MARGINLEAK_EVIDENCE_INCOMPLETE"],
+      decidedBy: "deterministic_policy",
+      policyVersion: "marginleak-review-g4a.1",
+    };
+    const missingData = missingFinding.deterministic.data;
+    missingData.assessment = "indeterminate";
+    missingData.evidenceCompleteness = "incomplete";
+    missingData.totals = {
+      expectedContributionMargin: null,
+      observedContributionMargin: null,
+      netContributionVariance: null,
+      leakAmount: null,
+    };
+    missingData.missingEvidencePaths = ["/financials/cogs/observed"];
+    missingData.findings = [];
+    expect(
+      marginLeakEvaluationResponseSchema.safeParse(missingFinding).success,
+    ).toBe(false);
+
+    const extraneousReason = completeResponse();
+    extraneousReason.humanReview.reasonCodes = ["UNRELATED_REASON"];
+    expect(
+      marginLeakEvaluationResponseSchema.safeParse(extraneousReason).success,
     ).toBe(false);
   });
 });

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import {
+  MARGIN_LEAK_CONTRIBUTION_ROLES,
   MARGIN_LEAK_FINANCIAL_CATEGORIES,
   MARGIN_LEAK_MAX_COMPONENT_AMOUNT_MINOR,
   marginLeakAssessmentSchema,
@@ -304,10 +305,19 @@ export const healthResponseSchema = z.strictObject({
   version: opaqueIdSchema,
 });
 
+const marginLeakEvidenceTimestampSchema = z
+  .string()
+  .datetime({ offset: false })
+  .describe("UTC timestamp supplied for the synthetic evidence");
+
+const marginLeakScenarioRefSchema = scenarioRefSchema.extend({
+  synthetic: z.literal(true),
+});
+
 const marginLeakEvidenceSourceSchema = z.strictObject({
   kind: z.literal("synthetic_fixture"),
   label: z.string().trim().min(1).max(160),
-  recordedAt: utcTimestampSchema,
+  recordedAt: marginLeakEvidenceTimestampSchema,
 });
 
 const marginLeakFinancialObservationSchema = z.strictObject({
@@ -342,7 +352,7 @@ export const marginLeakEvaluationRequestSchema = z
   .strictObject({
     schemaVersion: schemaVersionSchema,
     moduleId: z.literal("marginleak"),
-    scenario: scenarioRefSchema,
+    scenario: marginLeakScenarioRefSchema,
     orderRef: opaqueIdSchema,
     currency: currencyCodeSchema,
     observationState: marginLeakObservationStateSchema,
@@ -385,7 +395,11 @@ export const marginLeakEvaluationRequestSchema = z
   });
 
 const marginLeakNonnegativeMoneySchema = moneySchema.extend({
-  amountMinor: z.number().int().nonnegative().safe(),
+  amountMinor: z
+    .number()
+    .int()
+    .nonnegative()
+    .max(MARGIN_LEAK_MAX_COMPONENT_AMOUNT_MINOR),
 });
 
 const marginLeakCategoryComparisonSchema = z.strictObject({
@@ -399,18 +413,43 @@ const marginLeakCategoryComparisonSchema = z.strictObject({
   observedEvidenceId: opaqueIdSchema,
 });
 
-const marginLeakVarianceFindingSchema = z.strictObject({
-  code: z.enum(["ADVERSE_COMPONENT_VARIANCE", "FAVORABLE_COMPONENT_VARIANCE"]),
-  impact: z.enum(["adverse", "favorable"]),
+const MARGIN_LEAK_EVIDENCE_PATHS = MARGIN_LEAK_FINANCIAL_CATEGORIES.flatMap(
+  (category) => [
+    `/financials/${category}/expected`,
+    `/financials/${category}/observed`,
+  ],
+) as [string, ...string[]];
+
+const marginLeakEvidencePathSchema = z.enum(MARGIN_LEAK_EVIDENCE_PATHS);
+
+const marginLeakEvidenceRefSchema = evidenceRefSchema.extend({
+  factPath: marginLeakEvidencePathSchema,
+  sourceKind: z.literal("synthetic_fixture"),
+});
+
+const marginLeakVarianceFindingShape = {
   category: z.enum(MARGIN_LEAK_FINANCIAL_CATEGORIES),
   amount: marginLeakNonnegativeMoneySchema,
   evidenceIds: z.tuple([opaqueIdSchema, opaqueIdSchema]),
-});
+};
+
+const marginLeakVarianceFindingSchema = z.discriminatedUnion("code", [
+  z.strictObject({
+    code: z.literal("ADVERSE_COMPONENT_VARIANCE"),
+    impact: z.literal("adverse"),
+    ...marginLeakVarianceFindingShape,
+  }),
+  z.strictObject({
+    code: z.literal("FAVORABLE_COMPONENT_VARIANCE"),
+    impact: z.literal("favorable"),
+    ...marginLeakVarianceFindingShape,
+  }),
+]);
 
 const marginLeakMissingFindingSchema = z.strictObject({
   code: z.literal("MISSING_FINANCIAL_INPUT"),
   impact: z.literal("uncertain"),
-  fieldPath: z.string().startsWith("/financials/").max(512),
+  fieldPath: marginLeakEvidencePathSchema,
 });
 
 const marginLeakProvisionalFindingSchema = z.strictObject({
@@ -442,13 +481,12 @@ export const marginLeakDeterministicDataSchema = z.strictObject({
   totals: marginLeakTotalsSchema,
   categoryComparisons: z.array(marginLeakCategoryComparisonSchema).max(8),
   findings: z.array(marginLeakFindingSchema).max(32),
-  missingEvidencePaths: z
-    .array(z.string().startsWith("/financials/").max(512))
-    .max(16),
+  missingEvidencePaths: z.array(marginLeakEvidencePathSchema).max(16),
 });
 
 const marginLeakDeterministicResultSchema = deterministicResultSchema.extend({
   data: marginLeakDeterministicDataSchema,
+  evidenceRefs: z.array(marginLeakEvidenceRefSchema).max(16),
 });
 
 export const marginLeakEvaluationResponseSchema = z
@@ -457,7 +495,7 @@ export const marginLeakEvaluationResponseSchema = z
     moduleId: z.literal("marginleak"),
     analysisStatus: analysisStatusSchema,
     metadata: responseMetadataSchema,
-    scenario: scenarioRefSchema,
+    scenario: marginLeakScenarioRefSchema,
     deterministic: marginLeakDeterministicResultSchema,
     humanReview: humanReviewMetadataSchema,
   })
@@ -569,6 +607,188 @@ export const marginLeakEvaluationResponseSchema = z
       });
     }
 
+    if (
+      Date.parse(value.metadata.respondedAt) <
+      Date.parse(value.metadata.receivedAt)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["metadata", "respondedAt"],
+        message: "The response timestamp cannot precede receipt.",
+      });
+    }
+
+    const comparisonCategories = new Set<string>();
+    data.categoryComparisons.forEach((comparison, index) => {
+      if (comparisonCategories.has(comparison.category)) {
+        context.addIssue({
+          code: "custom",
+          path: ["deterministic", "data", "categoryComparisons", index],
+          message: "Each financial category may appear only once.",
+        });
+      }
+      comparisonCategories.add(comparison.category);
+
+      const contributionSign =
+        MARGIN_LEAK_CONTRIBUTION_ROLES[comparison.category];
+      const expectedRole = contributionSign === 1 ? "revenue" : "deduction";
+      const signedVariance =
+        contributionSign *
+        (comparison.expected.amountMinor - comparison.observed.amountMinor);
+      const expectedDirection =
+        signedVariance > 0
+          ? "adverse"
+          : signedVariance < 0
+            ? "favorable"
+            : "neutral";
+
+      if (
+        comparison.role !== expectedRole ||
+        comparison.direction !== expectedDirection ||
+        comparison.varianceAmount.amountMinor !== Math.abs(signedVariance)
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["deterministic", "data", "categoryComparisons", index],
+          message:
+            "Category role, direction, and variance must match its financial values.",
+        });
+      }
+    });
+
+    if (
+      data.evidenceCompleteness === "complete" &&
+      (data.categoryComparisons.length !==
+        MARGIN_LEAK_FINANCIAL_CATEGORIES.length ||
+        comparisonCategories.size !== MARGIN_LEAK_FINANCIAL_CATEGORIES.length)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["deterministic", "data", "categoryComparisons"],
+        message:
+          "Complete evidence requires exactly one comparison for every financial category.",
+      });
+    }
+
+    const expectedTotal = totals.expectedContributionMargin;
+    const observedTotal = totals.observedContributionMargin;
+    const varianceTotal = totals.netContributionVariance;
+    if (
+      data.evidenceCompleteness === "complete" &&
+      expectedTotal !== null &&
+      observedTotal !== null &&
+      varianceTotal !== null &&
+      data.categoryComparisons.length ===
+        MARGIN_LEAK_FINANCIAL_CATEGORIES.length &&
+      comparisonCategories.size === MARGIN_LEAK_FINANCIAL_CATEGORIES.length
+    ) {
+      let expectedMargin = 0;
+      let observedMargin = 0;
+      for (const comparison of data.categoryComparisons) {
+        const sign = MARGIN_LEAK_CONTRIBUTION_ROLES[comparison.category];
+        expectedMargin += comparison.expected.amountMinor * sign;
+        observedMargin += comparison.observed.amountMinor * sign;
+      }
+      const netVariance = expectedMargin - observedMargin;
+      if (
+        expectedTotal.amountMinor !== expectedMargin ||
+        observedTotal.amountMinor !== observedMargin ||
+        varianceTotal.amountMinor !== netVariance
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["deterministic", "data", "totals"],
+          message:
+            "Aggregate totals must equal the exact contribution-margin equations.",
+        });
+      }
+    }
+
+    const expectedVarianceFindings = data.categoryComparisons.filter(
+      ({ direction }) => direction !== "neutral",
+    );
+    const actualVarianceFindings = data.findings.filter(
+      (finding) =>
+        finding.code === "ADVERSE_COMPONENT_VARIANCE" ||
+        finding.code === "FAVORABLE_COMPONENT_VARIANCE",
+    );
+    const varianceFindingsMatch =
+      actualVarianceFindings.length === expectedVarianceFindings.length &&
+      expectedVarianceFindings.every((comparison) =>
+        actualVarianceFindings.some(
+          (finding) =>
+            finding.category === comparison.category &&
+            finding.impact === comparison.direction &&
+            finding.amount.amountMinor ===
+              comparison.varianceAmount.amountMinor &&
+            finding.amount.currency === comparison.varianceAmount.currency &&
+            finding.evidenceIds[0] === comparison.expectedEvidenceId &&
+            finding.evidenceIds[1] === comparison.observedEvidenceId,
+        ),
+      );
+    if (!varianceFindingsMatch) {
+      context.addIssue({
+        code: "custom",
+        path: ["deterministic", "data", "findings"],
+        message:
+          "Variance findings must exactly match non-neutral category comparisons.",
+      });
+    }
+
+    const missingFindingPaths = data.findings.flatMap((finding) =>
+      finding.code === "MISSING_FINANCIAL_INPUT" ? [finding.fieldPath] : [],
+    );
+    const missingPathsMatch =
+      new Set(missingFindingPaths).size === missingFindingPaths.length &&
+      new Set(data.missingEvidencePaths).size ===
+        data.missingEvidencePaths.length &&
+      missingFindingPaths.length === data.missingEvidencePaths.length &&
+      missingFindingPaths.every((path) =>
+        data.missingEvidencePaths.includes(path),
+      );
+    const provisionalFindingCount = data.findings.filter(
+      ({ code }) => code === "PROVISIONAL_FINANCIAL_INPUTS",
+    ).length;
+    if (
+      !missingPathsMatch ||
+      provisionalFindingCount !==
+        (data.observationState === "provisional" ? 1 : 0)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["deterministic", "data", "findings"],
+        message:
+          "Uncertainty findings must exactly match missing and provisional evidence state.",
+      });
+    }
+
+    const expectedReasonCodes = [
+      ...(data.evidenceCompleteness === "incomplete"
+        ? ["MARGINLEAK_EVIDENCE_INCOMPLETE"]
+        : []),
+      ...(data.observationState === "provisional"
+        ? ["MARGINLEAK_PROVISIONAL_INPUTS"]
+        : []),
+      ...(data.evidenceCompleteness === "complete" &&
+      data.observationState === "final" &&
+      data.assessment === "leak_detected"
+        ? ["MARGINLEAK_LEAK_DETECTED"]
+        : []),
+    ].sort();
+    const actualReasonCodes = [...value.humanReview.reasonCodes].sort();
+    if (
+      actualReasonCodes.length !== expectedReasonCodes.length ||
+      actualReasonCodes.some(
+        (reasonCode, index) => reasonCode !== expectedReasonCodes[index],
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["humanReview", "reasonCodes"],
+        message: "Human-review reasons must exactly match deterministic state.",
+      });
+    }
+
     const moneyValues = [
       ...totalValues.filter((total) => total !== null),
       ...data.categoryComparisons.flatMap((comparison) => [
@@ -593,6 +813,88 @@ export const marginLeakEvaluationResponseSchema = z
     const evidenceIds = new Set(
       value.deterministic.evidenceRefs.map(({ evidenceId }) => evidenceId),
     );
+    const evidencePaths = new Set(
+      value.deterministic.evidenceRefs.map(({ factPath }) => factPath),
+    );
+    if (
+      evidenceIds.size !== value.deterministic.evidenceRefs.length ||
+      evidencePaths.size !== value.deterministic.evidenceRefs.length ||
+      value.deterministic.evidenceRefs.some(
+        ({ factPath, sourceKind }) =>
+          sourceKind !== "synthetic_fixture" ||
+          !/^\/financials\/(grossItemRevenue|shippingRevenue|discounts|cogs|shippingCost|fulfillmentCost|paymentCost|platformCost)\/(expected|observed)$/.test(
+            factPath,
+          ),
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["deterministic", "evidenceRefs"],
+        message:
+          "MarginLeak evidence references must be unique synthetic financial input paths.",
+      });
+    }
+
+    const evidenceById = new Map(
+      value.deterministic.evidenceRefs.map((reference) => [
+        reference.evidenceId,
+        reference,
+      ]),
+    );
+    const comparisonEvidenceMatches = data.categoryComparisons.every(
+      (comparison) =>
+        evidenceById.get(comparison.expectedEvidenceId)?.factPath ===
+          `/financials/${comparison.category}/expected` &&
+        evidenceById.get(comparison.observedEvidenceId)?.factPath ===
+          `/financials/${comparison.category}/observed`,
+    );
+    if (!comparisonEvidenceMatches) {
+      context.addIssue({
+        code: "custom",
+        path: ["deterministic", "evidenceRefs"],
+        message:
+          "Category comparison evidence must resolve to its exact financial input paths.",
+      });
+    }
+
+    const evidenceByPath = new Map(
+      value.deterministic.evidenceRefs.map((reference) => [
+        reference.factPath,
+        reference,
+      ]),
+    );
+    const missingPathSet = new Set(data.missingEvidencePaths);
+    const evidencePartitionMatches = MARGIN_LEAK_EVIDENCE_PATHS.every(
+      (path) => evidenceByPath.has(path) !== missingPathSet.has(path),
+    );
+    const comparisonsMatchAvailablePairs =
+      MARGIN_LEAK_FINANCIAL_CATEGORIES.every((category) => {
+        const expectedRef = evidenceByPath.get(
+          `/financials/${category}/expected`,
+        );
+        const observedRef = evidenceByPath.get(
+          `/financials/${category}/observed`,
+        );
+        const comparison = data.categoryComparisons.find(
+          (candidate) => candidate.category === category,
+        );
+        if (expectedRef && observedRef) {
+          return (
+            comparison?.expectedEvidenceId === expectedRef.evidenceId &&
+            comparison.observedEvidenceId === observedRef.evidenceId
+          );
+        }
+        return comparison === undefined;
+      });
+    if (!evidencePartitionMatches || !comparisonsMatchAvailablePairs) {
+      context.addIssue({
+        code: "custom",
+        path: ["deterministic", "evidenceRefs"],
+        message:
+          "Evidence references, missing paths, and comparisons must describe one consistent input set.",
+      });
+    }
+
     const requiredEvidenceIds = [
       ...data.categoryComparisons.flatMap((comparison) => [
         comparison.expectedEvidenceId,

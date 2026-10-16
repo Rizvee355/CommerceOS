@@ -29,7 +29,7 @@ The request uses:
 - a synthetic scenario and opaque order reference;
 - one ISO 4217 currency;
 - `observationState: "final" | "provisional"`;
-- exactly the eight approved category keys, each with optional expected and observed evidence;
+- only the eight approved category keys, each optional so absent expected or observed evidence remains explicitly incomplete;
 - nonnegative integer minor-unit amounts capped at `562949953421311`;
 - unique evidence IDs and UTC source timestamps.
 
@@ -353,6 +353,7 @@ Implemented controls:
 - strict schemas reject unknown fields and non-synthetic scenarios;
 - request currency must match every observation;
 - evidence identifiers must be unique;
+- response totals, category roles, directions, findings, evidence paths, and review reasons are reconciled before emission;
 - timestamps must be UTC;
 - amounts must be nonnegative exact integers within the reviewed bound;
 - body size is enforced from both declared length and actual streamed bytes;
@@ -401,7 +402,7 @@ The adapter may explain findings, rank merchant-actionable mitigations, state un
 
 ## Test evidence
 
-- Canonical contract tests cover strict parsing, versions, currency, timestamps, duplicate evidence, amount boundaries, response contradictions, and generic-envelope compatibility.
+- Canonical contract tests cover strict parsing, versions, currency, timestamps, duplicate evidence, amount boundaries, aggregate/category reconciliation, provenance, finding/review contradictions, and generic-envelope compatibility.
 - G4A.2 domain tests preserve negative-contribution semantics and independently cross-check safe aggregate extremes with `BigInt`.
 - Orchestrator tests cover final leak, final no-leak, incomplete, provisional, metadata, and evidence references.
 - Route tests cover valid outcomes, validation classes, declared and streamed size limits, invalid UTF-8, error sanitization, and governance state.
