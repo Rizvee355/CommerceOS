@@ -143,7 +143,7 @@ describe("PromiseGuard UI components", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders AiPanel with AMD Instinct branding when provenance identifies authorized AMD provider", () => {
+  it("renders AiPanel with neutral branding for live providers while G0 verification is blocked", () => {
     render(
       <AiPanel
         inference={{
@@ -158,10 +158,28 @@ describe("PromiseGuard UI components", () => {
       />,
     );
 
-    expect(screen.getByText("AMD Instinct Accelerated")).toBeInTheDocument();
-    expect(
-      screen.queryByText("Live Inference Provider"),
-    ).not.toBeInTheDocument();
+    expect(screen.getByText("Live Inference Provider")).toBeInTheDocument();
+    expect(screen.queryByText(/AMD Instinct/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Synthetic Mock")).not.toBeInTheDocument();
+  });
+
+  it("regression: ensures arbitrary amd-* provider ID cannot trigger AMD branding", () => {
+    render(
+      <AiPanel
+        inference={{
+          status: "available",
+          providerId: "amd-arbitrary-unverified-adapter",
+          modelId: "custom-model",
+          adapterVersion: "1.0",
+          generatedAt: "2026-10-15T12:00:00.000Z",
+          durationMs: 72,
+          provenance: "live",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Live Inference Provider")).toBeInTheDocument();
+    expect(screen.queryByText(/AMD Instinct/i)).not.toBeInTheDocument();
     expect(screen.queryByText("Synthetic Mock")).not.toBeInTheDocument();
   });
 
@@ -181,9 +199,7 @@ describe("PromiseGuard UI components", () => {
     );
 
     expect(screen.getByText("Live Inference Provider")).toBeInTheDocument();
-    expect(
-      screen.queryByText("AMD Instinct Accelerated"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/AMD Instinct/i)).not.toBeInTheDocument();
     expect(screen.queryByText("Synthetic Mock")).not.toBeInTheDocument();
   });
 

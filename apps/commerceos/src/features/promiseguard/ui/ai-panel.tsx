@@ -49,10 +49,16 @@ export const AiPanel = ({ inference, aiRecommendation }: AiPanelProps) => {
   }
 
   const isSynthetic = inference.provenance === "synthetic_mock";
+
+  // G0 authenticated AMD hardware verification remains blocked. Broad string
+  // prefixes like `amd-*` are strictly disallowed. All live inference providers
+  // receive neutral branding until an exact, verified AMD adapter identity is
+  // approved by the Control Room.
+  const APPROVED_AMD_ADAPTER_ID: string | null = null;
   const isAuthorizedAmd =
     !isSynthetic &&
-    (inference.providerId === "amd-token-factory" ||
-      inference.providerId.startsWith("amd-"));
+    APPROVED_AMD_ADAPTER_ID !== null &&
+    inference.providerId === APPROVED_AMD_ADAPTER_ID;
 
   const providerLabel = isSynthetic
     ? "Synthetic Mock"
