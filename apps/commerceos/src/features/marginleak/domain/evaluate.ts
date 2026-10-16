@@ -2,7 +2,7 @@ import {
   CONTRIBUTION_ROLES,
   FINANCIAL_CATEGORIES,
   type FinancialCategory,
-  type MarginLeakPrototypeRequest,
+  type MarginLeakEvaluationInput,
 } from "./schema";
 
 export const MARGIN_LEAK_RULESET_VERSION =
@@ -94,7 +94,7 @@ const emptyTotals = (): MarginLeakResult["totals"] => ({
 });
 
 export const evaluateMarginLeak = (
-  request: MarginLeakPrototypeRequest,
+  request: MarginLeakEvaluationInput,
 ): MarginLeakResult => {
   let expectedContributionMargin = 0;
   let observedContributionMargin = 0;
