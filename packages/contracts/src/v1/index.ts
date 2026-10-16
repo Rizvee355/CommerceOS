@@ -1,6 +1,14 @@
 import { z } from "zod";
 
 import {
+  MARGIN_LEAK_FINANCIAL_CATEGORIES,
+  MARGIN_LEAK_MAX_COMPONENT_AMOUNT_MINOR,
+  marginLeakAssessmentSchema,
+  marginLeakEvidenceCompletenessSchema,
+  marginLeakObservationStateSchema,
+  marginLeakVarianceDirectionSchema,
+} from "./marginleak";
+import {
   dispatchCommitmentSchema,
   promiseGuardAiDataSchema,
   promiseGuardDeterministicDataSchema,
@@ -8,6 +16,7 @@ import {
   promiseGuardOpaqueIdSchema,
 } from "./promiseguard";
 
+export * from "./marginleak";
 export * from "./promiseguard";
 
 export const SCHEMA_VERSION = "1.0" as const;
@@ -295,6 +304,315 @@ export const healthResponseSchema = z.strictObject({
   version: opaqueIdSchema,
 });
 
+const marginLeakEvidenceSourceSchema = z.strictObject({
+  kind: z.literal("synthetic_fixture"),
+  label: z.string().trim().min(1).max(160),
+  recordedAt: utcTimestampSchema,
+});
+
+const marginLeakFinancialObservationSchema = z.strictObject({
+  amountMinor: z
+    .number()
+    .int()
+    .nonnegative()
+    .max(MARGIN_LEAK_MAX_COMPONENT_AMOUNT_MINOR),
+  currency: currencyCodeSchema,
+  evidenceId: opaqueIdSchema,
+  source: marginLeakEvidenceSourceSchema,
+});
+
+const marginLeakFinancialComponentSchema = z.strictObject({
+  expected: marginLeakFinancialObservationSchema.optional(),
+  observed: marginLeakFinancialObservationSchema.optional(),
+});
+
+const marginLeakFinancialsSchema = z.strictObject(
+  Object.fromEntries(
+    MARGIN_LEAK_FINANCIAL_CATEGORIES.map((category) => [
+      category,
+      marginLeakFinancialComponentSchema.optional(),
+    ]),
+  ) as Record<
+    (typeof MARGIN_LEAK_FINANCIAL_CATEGORIES)[number],
+    z.ZodOptional<typeof marginLeakFinancialComponentSchema>
+  >,
+);
+
+export const marginLeakEvaluationRequestSchema = z
+  .strictObject({
+    schemaVersion: schemaVersionSchema,
+    moduleId: z.literal("marginleak"),
+    scenario: scenarioRefSchema,
+    orderRef: opaqueIdSchema,
+    currency: currencyCodeSchema,
+    observationState: marginLeakObservationStateSchema,
+    financials: marginLeakFinancialsSchema,
+  })
+  .superRefine((value, context) => {
+    if (!value.scenario.synthetic) {
+      context.addIssue({
+        code: "custom",
+        path: ["scenario", "synthetic"],
+        message: "MarginLeak currently accepts synthetic scenarios only.",
+      });
+    }
+
+    const evidenceIds = new Set<string>();
+    for (const category of MARGIN_LEAK_FINANCIAL_CATEGORIES) {
+      const component = value.financials[category];
+      for (const side of ["expected", "observed"] as const) {
+        const observation = component?.[side];
+        if (!observation) continue;
+
+        if (observation.currency !== value.currency) {
+          context.addIssue({
+            code: "custom",
+            path: ["financials", category, side, "currency"],
+            message: "Every financial input must use the request currency.",
+          });
+        }
+
+        if (evidenceIds.has(observation.evidenceId)) {
+          context.addIssue({
+            code: "custom",
+            path: ["financials", category, side, "evidenceId"],
+            message: "Evidence identifiers must be unique within the request.",
+          });
+        }
+        evidenceIds.add(observation.evidenceId);
+      }
+    }
+  });
+
+const marginLeakNonnegativeMoneySchema = moneySchema.extend({
+  amountMinor: z.number().int().nonnegative().safe(),
+});
+
+const marginLeakCategoryComparisonSchema = z.strictObject({
+  category: z.enum(MARGIN_LEAK_FINANCIAL_CATEGORIES),
+  role: z.enum(["revenue", "deduction"]),
+  expected: marginLeakNonnegativeMoneySchema,
+  observed: marginLeakNonnegativeMoneySchema,
+  direction: marginLeakVarianceDirectionSchema,
+  varianceAmount: marginLeakNonnegativeMoneySchema,
+  expectedEvidenceId: opaqueIdSchema,
+  observedEvidenceId: opaqueIdSchema,
+});
+
+const marginLeakVarianceFindingSchema = z.strictObject({
+  code: z.enum(["ADVERSE_COMPONENT_VARIANCE", "FAVORABLE_COMPONENT_VARIANCE"]),
+  impact: z.enum(["adverse", "favorable"]),
+  category: z.enum(MARGIN_LEAK_FINANCIAL_CATEGORIES),
+  amount: marginLeakNonnegativeMoneySchema,
+  evidenceIds: z.tuple([opaqueIdSchema, opaqueIdSchema]),
+});
+
+const marginLeakMissingFindingSchema = z.strictObject({
+  code: z.literal("MISSING_FINANCIAL_INPUT"),
+  impact: z.literal("uncertain"),
+  fieldPath: z.string().startsWith("/financials/").max(512),
+});
+
+const marginLeakProvisionalFindingSchema = z.strictObject({
+  code: z.literal("PROVISIONAL_FINANCIAL_INPUTS"),
+  impact: z.literal("uncertain"),
+  fieldPath: z.literal("/observationState"),
+});
+
+export const marginLeakFindingSchema = z.union([
+  marginLeakVarianceFindingSchema,
+  marginLeakMissingFindingSchema,
+  marginLeakProvisionalFindingSchema,
+]);
+
+const nullableMoneySchema = moneySchema.nullable();
+const marginLeakTotalsSchema = z.strictObject({
+  expectedContributionMargin: nullableMoneySchema,
+  observedContributionMargin: nullableMoneySchema,
+  netContributionVariance: nullableMoneySchema,
+  leakAmount: nullableMoneySchema,
+});
+
+export const marginLeakDeterministicDataSchema = z.strictObject({
+  assessment: marginLeakAssessmentSchema,
+  evidenceCompleteness: marginLeakEvidenceCompletenessSchema,
+  observationState: marginLeakObservationStateSchema,
+  orderRef: opaqueIdSchema,
+  currency: currencyCodeSchema,
+  totals: marginLeakTotalsSchema,
+  categoryComparisons: z.array(marginLeakCategoryComparisonSchema).max(8),
+  findings: z.array(marginLeakFindingSchema).max(32),
+  missingEvidencePaths: z
+    .array(z.string().startsWith("/financials/").max(512))
+    .max(16),
+});
+
+const marginLeakDeterministicResultSchema = deterministicResultSchema.extend({
+  data: marginLeakDeterministicDataSchema,
+});
+
+export const marginLeakEvaluationResponseSchema = z
+  .strictObject({
+    schemaVersion: schemaVersionSchema,
+    moduleId: z.literal("marginleak"),
+    analysisStatus: analysisStatusSchema,
+    metadata: responseMetadataSchema,
+    scenario: scenarioRefSchema,
+    deterministic: marginLeakDeterministicResultSchema,
+    humanReview: humanReviewMetadataSchema,
+  })
+  .superRefine((value, context) => {
+    const generic = analysisResponseEnvelopeSchema.safeParse(value);
+    if (!generic.success) {
+      generic.error.issues.forEach((issue) => {
+        context.addIssue({
+          code: "custom",
+          path: issue.path,
+          message: issue.message,
+        });
+      });
+    }
+
+    if (!value.scenario.synthetic) {
+      context.addIssue({
+        code: "custom",
+        path: ["scenario", "synthetic"],
+        message: "MarginLeak responses must describe synthetic scenarios.",
+      });
+    }
+
+    const data = value.deterministic.data;
+    const totals = data.totals;
+    const totalValues = Object.values(totals);
+    const allTotalsNull = totalValues.every((total) => total === null);
+    const completeTotals =
+      totals.expectedContributionMargin !== null &&
+      totals.observedContributionMargin !== null &&
+      totals.netContributionVariance !== null;
+
+    if (data.evidenceCompleteness === "incomplete") {
+      if (
+        data.assessment !== "indeterminate" ||
+        !allTotalsNull ||
+        data.missingEvidencePaths.length === 0
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["deterministic", "data"],
+          message:
+            "Incomplete evidence requires an indeterminate assessment, missing paths, and null aggregate totals.",
+        });
+      }
+    } else {
+      if (!completeTotals || data.missingEvidencePaths.length > 0) {
+        context.addIssue({
+          code: "custom",
+          path: ["deterministic", "data", "totals"],
+          message:
+            "Complete evidence requires calculated margins and variance without missing paths.",
+        });
+      } else if (data.observationState === "provisional") {
+        if (data.assessment !== "indeterminate" || totals.leakAmount !== null) {
+          context.addIssue({
+            code: "custom",
+            path: ["deterministic", "data", "totals", "leakAmount"],
+            message:
+              "Provisional evidence cannot produce a confirmed leak amount.",
+          });
+        }
+      } else if (
+        totals.leakAmount === null ||
+        totals.netContributionVariance === null
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["deterministic", "data", "totals", "leakAmount"],
+          message: "Complete final evidence requires a confirmed leak amount.",
+        });
+      } else {
+        const variance = totals.netContributionVariance.amountMinor;
+        const expectedAssessment =
+          variance > 0 ? "leak_detected" : "no_leak_detected";
+        if (
+          data.assessment !== expectedAssessment ||
+          totals.leakAmount.amountMinor !== Math.max(variance, 0)
+        ) {
+          context.addIssue({
+            code: "custom",
+            path: ["deterministic", "data", "totals", "leakAmount"],
+            message:
+              "Final assessment and confirmed leak must match signed net variance.",
+          });
+        }
+      }
+    }
+
+    const requiresReview = data.assessment !== "no_leak_detected";
+    if (
+      value.humanReview.required !== requiresReview ||
+      (requiresReview && value.humanReview.reasonCodes.length === 0) ||
+      (!requiresReview && value.humanReview.reasonCodes.length > 0)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["humanReview"],
+        message: "Human-review metadata must match the MarginLeak assessment.",
+      });
+    }
+
+    const expectedStatus = requiresReview ? "needs_review" : "complete";
+    if (value.analysisStatus !== expectedStatus) {
+      context.addIssue({
+        code: "custom",
+        path: ["analysisStatus"],
+        message: "Analysis status must match deterministic review policy.",
+      });
+    }
+
+    const moneyValues = [
+      ...totalValues.filter((total) => total !== null),
+      ...data.categoryComparisons.flatMap((comparison) => [
+        comparison.expected,
+        comparison.observed,
+        comparison.varianceAmount,
+      ]),
+      ...data.findings.flatMap((finding) =>
+        "amount" in finding ? [finding.amount] : [],
+      ),
+    ];
+    moneyValues.forEach((amount) => {
+      if (amount.currency !== data.currency) {
+        context.addIssue({
+          code: "custom",
+          path: ["deterministic", "data", "currency"],
+          message: "Every response amount must use the response currency.",
+        });
+      }
+    });
+
+    const evidenceIds = new Set(
+      value.deterministic.evidenceRefs.map(({ evidenceId }) => evidenceId),
+    );
+    const requiredEvidenceIds = [
+      ...data.categoryComparisons.flatMap((comparison) => [
+        comparison.expectedEvidenceId,
+        comparison.observedEvidenceId,
+      ]),
+      ...data.findings.flatMap((finding) =>
+        "evidenceIds" in finding ? finding.evidenceIds : [],
+      ),
+    ];
+    if (
+      requiredEvidenceIds.some((evidenceId) => !evidenceIds.has(evidenceId))
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["deterministic", "evidenceRefs"],
+        message: "Every response evidence identifier must resolve.",
+      });
+    }
+  });
+
 export const promiseGuardEvaluationRequestSchema = z
   .strictObject({
     schemaVersion: schemaVersionSchema,
@@ -460,4 +778,14 @@ export type PromiseGuardAiMitigationOutput = z.infer<
 >;
 export type PromiseGuardEvaluationResponse = z.infer<
   typeof promiseGuardEvaluationResponseSchema
+>;
+export type MarginLeakEvaluationRequest = z.infer<
+  typeof marginLeakEvaluationRequestSchema
+>;
+export type MarginLeakFinding = z.infer<typeof marginLeakFindingSchema>;
+export type MarginLeakDeterministicData = z.infer<
+  typeof marginLeakDeterministicDataSchema
+>;
+export type MarginLeakEvaluationResponse = z.infer<
+  typeof marginLeakEvaluationResponseSchema
 >;
