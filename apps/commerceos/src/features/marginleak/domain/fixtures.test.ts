@@ -40,7 +40,7 @@ describe("MarginLeak synthetic financial fixtures", () => {
       expectedMargin: 4_900,
       observedMargin: 4_675,
       netVariance: 225,
-      leakAmount: 225,
+      leakAmount: null,
     },
   ])(
     "validates and evaluates the $name scenario",
@@ -73,7 +73,10 @@ describe("MarginLeak synthetic financial fixtures", () => {
             amountMinor: netVariance,
             currency: "USD",
           },
-          leakAmount: { amountMinor: leakAmount, currency: "USD" },
+          leakAmount:
+            leakAmount === null
+              ? null
+              : { amountMinor: leakAmount, currency: "USD" },
         },
       });
     },

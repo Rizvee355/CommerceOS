@@ -202,7 +202,9 @@ export const evaluateMarginLeak = (
         request.currency,
       ),
       netContributionVariance: money(netContributionVariance, request.currency),
-      leakAmount: money(Math.max(netContributionVariance, 0), request.currency),
+      leakAmount: provisional
+        ? null
+        : money(Math.max(netContributionVariance, 0), request.currency),
     };
   }
 

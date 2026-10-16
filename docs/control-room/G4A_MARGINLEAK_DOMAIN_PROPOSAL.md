@@ -101,7 +101,8 @@ For each component, its contribution effect is the signed amount defined by the 
 ```text
 component adverse variance = expected contribution effect - observed contribution effect
 net contribution variance  = expected contribution margin - observed contribution margin
-leak amount                = max(net contribution variance, 0)
+confirmed leak amount      = max(net contribution variance, 0) for complete final evidence
+                             null for provisional or incomplete evidence
 ```
 
 A positive component variance is adverse, a negative variance is favorable, and zero is neutral. Favorable movement can offset adverse movement in the net result. The response retains every component comparison so the net result remains explainable.
@@ -116,9 +117,9 @@ The evaluator returns one of three assessments:
 
 When inputs are incomplete, the evaluator reports comparisons for complete pairs but does not return aggregate margins, net variance, or a leak amount. A known adverse component cannot prove a net order-level leak because an unknown favorable component could offset it.
 
-When inputs are complete but provisional, aggregate calculations are returned as provisional facts, but the business assessment remains `indeterminate`.
+When inputs are complete but provisional, expected contribution margin, observed contribution margin, and signed net contribution variance are returned as provisional facts. `leakAmount` remains `null` because a calculated adverse variance is not confirmed leakage until the observed evidence is final. The business assessment remains `indeterminate` and human review is required.
 
-The prototype has no materiality threshold. One minor unit of adverse net variance is classified as a leak. Control Room must approve a threshold policy before production use.
+The prototype has no materiality threshold. For complete final evidence, one minor unit of adverse net variance is classified as a leak. Control Room must approve a threshold policy before production use.
 
 ## Human-review policy
 
@@ -136,7 +137,8 @@ The result contains:
 
 - assessment, completeness, currency, and observation state;
 - expected and observed contribution margins when all inputs exist;
-- signed net contribution variance and nonnegative leak amount when all inputs exist;
+- signed net contribution variance when all inputs exist;
+- a nonnegative confirmed leak amount only when all inputs exist and observations are final; otherwise `leakAmount` is `null`;
 - a component breakdown with direction, absolute variance amount, and both evidence IDs;
 - missing input paths without invented evidence IDs;
 - deterministic findings;
@@ -149,7 +151,7 @@ Every present amount in a component comparison resolves to its submitted evidenc
 1. **Leak detected:** complete final evidence, with shipping and payment overruns plus lower observed revenue producing a positive net leak.
 2. **No leak detected:** complete final evidence, with favorable COGS and shipping movement offsetting a small revenue shortfall.
 3. **Indeterminate:** a required observed COGS amount and expected platform cost are missing.
-4. **Provisional:** all amounts are present, but the observed figures are not final; totals are calculated while the assessment remains indeterminate.
+4. **Provisional:** all amounts are present, but the observed figures are not final; both margins and signed variance are calculated, `leakAmount` remains `null`, and the assessment remains indeterminate.
 
 ## Security and governance
 

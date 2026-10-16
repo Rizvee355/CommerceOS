@@ -393,7 +393,7 @@ describe("MarginLeak deterministic evaluator", () => {
     ).toBe(true);
   });
 
-  it("calculates complete provisional totals but requires review", () => {
+  it("retains provisional variance without claiming confirmed leakage", () => {
     const request = requestWith({
       discounts: 650,
       paymentCost: 375,
@@ -409,7 +409,7 @@ describe("MarginLeak deterministic evaluator", () => {
         expectedContributionMargin: { amountMinor: 4_900, currency: "USD" },
         observedContributionMargin: { amountMinor: 4_675, currency: "USD" },
         netContributionVariance: { amountMinor: 225, currency: "USD" },
-        leakAmount: { amountMinor: 225, currency: "USD" },
+        leakAmount: null,
       },
       humanReview: {
         required: true,
