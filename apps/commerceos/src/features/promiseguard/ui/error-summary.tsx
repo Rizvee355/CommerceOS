@@ -47,12 +47,6 @@ export const ErrorSummary = forwardRef<HTMLDivElement, ErrorSummaryProps>(
                         if (onFieldClick && error.key) {
                           e.preventDefault();
                           onFieldClick(error.key);
-                          const el = document.getElementById(domId);
-                          el?.focus();
-                          el?.scrollIntoView({
-                            behavior: "smooth",
-                            block: "center",
-                          });
                         }
                       }}
                     >

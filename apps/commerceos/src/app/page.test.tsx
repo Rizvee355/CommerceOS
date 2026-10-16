@@ -28,6 +28,9 @@ describe("CommerceOS overview", () => {
     expect(screen.getByText("AMD connection pending")).toBeInTheDocument();
     expect(screen.getByText("Synthetic preview available")).toBeInTheDocument();
     expect(
+      screen.getByRole("link", { name: /Open synthetic workspace/i }),
+    ).toHaveAttribute("href", "/promiseguard");
+    expect(
       screen.queryByText(/revenue|orders evaluated|margin saved/i),
     ).not.toBeInTheDocument();
   });

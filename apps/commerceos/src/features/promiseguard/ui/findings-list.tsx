@@ -4,12 +4,7 @@ import type {
   PromiseGuardEvaluationRequest,
   PromiseGuardFinding,
 } from "@commerceos/contracts";
-import {
-  fieldDomId,
-  fieldLabels,
-  focusKeyForFinding,
-  type FieldKey,
-} from "./form-model";
+import { fieldLabels, focusKeyForFinding, type FieldKey } from "./form-model";
 import { findingGuidance, findingLabels, impactLabels } from "./labels";
 
 export type FindingsListProps = {
@@ -64,13 +59,7 @@ export const FindingsList = ({
               <button
                 type="button"
                 className="pg-button pg-button-tertiary"
-                onClick={() => {
-                  onFocusField(focusKey);
-                  const domId = fieldDomId(focusKey);
-                  const el = document.getElementById(domId);
-                  el?.focus();
-                  el?.scrollIntoView({ behavior: "smooth", block: "center" });
-                }}
+                onClick={() => onFocusField(focusKey)}
               >
                 {finding.impact === "uncertain"
                   ? "Add this fact"
