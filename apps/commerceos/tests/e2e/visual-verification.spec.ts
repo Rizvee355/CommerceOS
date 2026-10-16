@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 const localScreenshotDir = path.join(
   process.cwd(),
@@ -10,7 +10,7 @@ const localScreenshotDir = path.join(
 const brainScreenshotDir =
   "C:\\Users\\HP\\.gemini\\antigravity\\brain\\78ffd127-4563-4245-87c8-bac1485ff785\\screenshots";
 
-const saveScreenshot = async (page: any, filename: string) => {
+const saveScreenshot = async (page: Page, filename: string) => {
   fs.mkdirSync(localScreenshotDir, { recursive: true });
   const localPath = path.join(localScreenshotDir, filename);
   await page.screenshot({ path: localPath, fullPage: true });
@@ -24,7 +24,7 @@ const saveScreenshot = async (page: any, filename: string) => {
   }
 };
 
-const assertNoHorizontalOverflow = async (page: any) => {
+const assertNoHorizontalOverflow = async (page: Page) => {
   await page.waitForTimeout(100);
   const result = await page.evaluate(() => {
     const docWidth = document.documentElement.clientWidth || window.innerWidth;
