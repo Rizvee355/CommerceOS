@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createArtifacts } from "./generate-artifacts";
 
 describe("contract artifact generation", () => {
-  it("generates OpenAPI 3.1 with the approved skeleton and PromiseGuard route", () => {
+  it("generates OpenAPI 3.1 with the approved analysis routes", () => {
     const artifacts = createArtifacts();
     const openapi = artifacts.get("openapi/openapi.json") as {
       openapi: string;
@@ -14,6 +14,7 @@ describe("contract artifact generation", () => {
     expect(Object.keys(openapi.paths).sort()).toEqual([
       "/api/v1/capabilities",
       "/api/v1/health",
+      "/api/v1/marginleak/analyze",
       "/api/v1/promiseguard/analyze",
     ]);
   });
@@ -26,6 +27,17 @@ describe("contract artifact generation", () => {
     ).toBe(true);
     expect(
       artifacts.has("json-schema/promiseguard-evaluation-response.schema.json"),
+    ).toBe(true);
+  });
+
+  it("publishes canonical MarginLeak request and response schemas", () => {
+    const artifacts = createArtifacts();
+
+    expect(
+      artifacts.has("json-schema/marginleak-evaluation-request.schema.json"),
+    ).toBe(true);
+    expect(
+      artifacts.has("json-schema/marginleak-evaluation-response.schema.json"),
     ).toBe(true);
   });
 
