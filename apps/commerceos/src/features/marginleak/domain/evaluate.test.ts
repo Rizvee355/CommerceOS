@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { evaluateMarginLeak } from "./evaluate";
 import {
   FINANCIAL_CATEGORIES,
+  MAX_COMPONENT_AMOUNT_MINOR,
   marginLeakPrototypeRequestSchema,
   type FinancialCategory,
 } from "./schema";
@@ -23,15 +24,19 @@ const expectedAmounts: Record<FinancialCategory, number> = {
 
 const requestWith = (
   observedOverrides: Partial<Record<FinancialCategory, number>>,
+  expectedOverrides: Partial<Record<FinancialCategory, number>> = {},
 ) => {
   const amounts = Object.fromEntries(
-    FINANCIAL_CATEGORIES.map((category) => [
-      category,
-      {
-        expected: expectedAmounts[category],
-        observed: observedOverrides[category] ?? expectedAmounts[category],
-      },
-    ]),
+    FINANCIAL_CATEGORIES.map((category) => {
+      const expected = expectedOverrides[category] ?? expectedAmounts[category];
+      return [
+        category,
+        {
+          expected,
+          observed: observedOverrides[category] ?? expected,
+        },
+      ];
+    }),
   ) as Amounts;
 
   return marginLeakPrototypeRequestSchema.parse({
@@ -71,6 +76,23 @@ const requestWith = (
     ),
   });
 };
+
+const zeroAmounts = (): Record<FinancialCategory, number> =>
+  Object.fromEntries(
+    FINANCIAL_CATEGORIES.map((category) => [category, 0]),
+  ) as Record<FinancialCategory, number>;
+
+const contributionMarginBigInt = (
+  amounts: Record<FinancialCategory, number>,
+): bigint =>
+  BigInt(amounts.grossItemRevenue) +
+  BigInt(amounts.shippingRevenue) -
+  BigInt(amounts.discounts) -
+  BigInt(amounts.cogs) -
+  BigInt(amounts.shippingCost) -
+  BigInt(amounts.fulfillmentCost) -
+  BigInt(amounts.paymentCost) -
+  BigInt(amounts.platformCost);
 
 describe("MarginLeak deterministic evaluator", () => {
   it("identifies an exact source-backed contribution-margin leak", () => {
@@ -170,6 +192,135 @@ describe("MarginLeak deterministic evaluator", () => {
         amount: { amountMinor: 100, currency: "USD" },
       }),
     );
+  });
+
+  it("detects unfavorable variance when both contribution margins are negative", () => {
+    const expected = {
+      ...zeroAmounts(),
+      grossItemRevenue: 1_000,
+      cogs: 1_200,
+    };
+    const observed = {
+      ...zeroAmounts(),
+      grossItemRevenue: 1_000,
+      cogs: 1_300,
+    };
+
+    const result = evaluateMarginLeak(requestWith(observed, expected));
+
+    expect(result).toMatchObject({
+      assessment: "leak_detected",
+      totals: {
+        expectedContributionMargin: { amountMinor: -200, currency: "USD" },
+        observedContributionMargin: { amountMinor: -300, currency: "USD" },
+        netContributionVariance: { amountMinor: 100, currency: "USD" },
+        leakAmount: { amountMinor: 100, currency: "USD" },
+      },
+      humanReview: {
+        required: true,
+        reasonCodes: ["MARGINLEAK_LEAK_DETECTED"],
+      },
+    });
+  });
+
+  it("does not call a negative contribution margin leakage when variance is favorable", () => {
+    const expected = {
+      ...zeroAmounts(),
+      grossItemRevenue: 1_000,
+      cogs: 1_300,
+    };
+    const observed = {
+      ...zeroAmounts(),
+      grossItemRevenue: 1_000,
+      cogs: 1_200,
+    };
+
+    const result = evaluateMarginLeak(requestWith(observed, expected));
+
+    expect(result).toMatchObject({
+      assessment: "no_leak_detected",
+      totals: {
+        expectedContributionMargin: { amountMinor: -300, currency: "USD" },
+        observedContributionMargin: { amountMinor: -200, currency: "USD" },
+        netContributionVariance: { amountMinor: -100, currency: "USD" },
+        leakAmount: { amountMinor: 0, currency: "USD" },
+      },
+      humanReview: { required: false, reasonCodes: [] },
+    });
+  });
+
+  it("matches independent BigInt arithmetic at both permitted derived extremes", () => {
+    const positive = {
+      ...zeroAmounts(),
+      grossItemRevenue: MAX_COMPONENT_AMOUNT_MINOR,
+      shippingRevenue: MAX_COMPONENT_AMOUNT_MINOR,
+    };
+    const negative = {
+      ...Object.fromEntries(
+        FINANCIAL_CATEGORIES.map((category) => [
+          category,
+          MAX_COMPONENT_AMOUNT_MINOR,
+        ]),
+      ),
+      grossItemRevenue: 0,
+      shippingRevenue: 0,
+    } as Record<FinancialCategory, number>;
+
+    const positiveBigInt = contributionMarginBigInt(positive);
+    const negativeBigInt = contributionMarginBigInt(negative);
+    const adverseVarianceBigInt = positiveBigInt - negativeBigInt;
+    const favorableVarianceBigInt = negativeBigInt - positiveBigInt;
+
+    expect(MAX_COMPONENT_AMOUNT_MINOR).toBe(562_949_953_421_311);
+    expect(adverseVarianceBigInt).toBeLessThanOrEqual(
+      BigInt(Number.MAX_SAFE_INTEGER),
+    );
+    expect(favorableVarianceBigInt).toBeGreaterThanOrEqual(
+      BigInt(Number.MIN_SAFE_INTEGER),
+    );
+
+    const adverse = evaluateMarginLeak(requestWith(negative, positive));
+    expect(adverse).toMatchObject({
+      assessment: "leak_detected",
+      totals: {
+        expectedContributionMargin: {
+          amountMinor: Number(positiveBigInt),
+          currency: "USD",
+        },
+        observedContributionMargin: {
+          amountMinor: Number(negativeBigInt),
+          currency: "USD",
+        },
+        netContributionVariance: {
+          amountMinor: Number(adverseVarianceBigInt),
+          currency: "USD",
+        },
+        leakAmount: {
+          amountMinor: Number(adverseVarianceBigInt),
+          currency: "USD",
+        },
+      },
+    });
+
+    const favorable = evaluateMarginLeak(requestWith(positive, negative));
+    expect(favorable).toMatchObject({
+      assessment: "no_leak_detected",
+      totals: {
+        expectedContributionMargin: {
+          amountMinor: Number(negativeBigInt),
+          currency: "USD",
+        },
+        observedContributionMargin: {
+          amountMinor: Number(positiveBigInt),
+          currency: "USD",
+        },
+        netContributionVariance: {
+          amountMinor: Number(favorableVarianceBigInt),
+          currency: "USD",
+        },
+        leakAmount: { amountMinor: 0, currency: "USD" },
+      },
+    });
   });
 
   it("classifies an exact zero variance as no leak", () => {

@@ -74,6 +74,24 @@ describe("MarginLeak G4A local request schema", () => {
     expect(Object.keys(parsed.financials)).toEqual(FINANCIAL_CATEGORIES);
   });
 
+  it("pins the exact component boundary and rejects one minor unit above it", () => {
+    expect(MAX_COMPONENT_AMOUNT_MINOR).toBe(562_949_953_421_311);
+
+    const permitted = completeCandidate();
+    observationAt(permitted, "grossItemRevenue", "expected").amountMinor =
+      MAX_COMPONENT_AMOUNT_MINOR;
+    expect(marginLeakPrototypeRequestSchema.safeParse(permitted).success).toBe(
+      true,
+    );
+
+    const rejected = completeCandidate();
+    observationAt(rejected, "grossItemRevenue", "expected").amountMinor =
+      MAX_COMPONENT_AMOUNT_MINOR + 1;
+    expect(marginLeakPrototypeRequestSchema.safeParse(rejected).success).toBe(
+      false,
+    );
+  });
+
   it.each([
     {
       label: "floating-point component amount",
