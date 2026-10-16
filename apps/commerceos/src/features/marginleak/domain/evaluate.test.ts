@@ -176,12 +176,99 @@ describe("MarginLeak deterministic evaluator", () => {
     const result = evaluateMarginLeak(requestWith({}));
 
     expect(result.assessment).toBe("no_leak_detected");
-    expect(result.totals.netContributionVariance.amountMinor).toBe(0);
-    expect(result.totals.leakAmount.amountMinor).toBe(0);
+    expect(result.totals.netContributionVariance).toEqual({
+      amountMinor: 0,
+      currency: "USD",
+    });
+    expect(result.totals.leakAmount).toEqual({
+      amountMinor: 0,
+      currency: "USD",
+    });
     expect(
       result.componentBreakdown.every(
         ({ direction }) => direction === "neutral",
       ),
     ).toBe(true);
+  });
+
+  it("keeps an incomplete order indeterminate without aggregate totals", () => {
+    const request = requestWith({
+      grossItemRevenue: 9_700,
+      shippingCost: 1_100,
+    });
+    delete request.financials.cogs?.observed;
+    delete request.financials.platformCost;
+
+    const result = evaluateMarginLeak(request);
+
+    expect(result).toMatchObject({
+      assessment: "indeterminate",
+      completeness: "incomplete",
+      missingInputs: [
+        "/financials/cogs/observed",
+        "/financials/platformCost/expected",
+        "/financials/platformCost/observed",
+      ],
+      totals: {
+        expectedContributionMargin: null,
+        observedContributionMargin: null,
+        netContributionVariance: null,
+        leakAmount: null,
+      },
+      humanReview: {
+        required: true,
+        reasonCodes: ["MARGINLEAK_EVIDENCE_INCOMPLETE"],
+      },
+    });
+    expect(result.componentBreakdown).toHaveLength(6);
+    expect(result.componentBreakdown).toContainEqual(
+      expect.objectContaining({
+        category: "grossItemRevenue",
+        direction: "adverse",
+        expectedEvidenceId: "ev-grossItemRevenue-expected",
+        observedEvidenceId: "ev-grossItemRevenue-observed",
+      }),
+    );
+
+    const missingFindings = result.findings.filter(
+      ({ code }) => code === "MISSING_FINANCIAL_INPUT",
+    );
+    const missingPaths = result.findings.flatMap((finding) =>
+      finding.code === "MISSING_FINANCIAL_INPUT" ? [finding.fieldPath] : [],
+    );
+    expect(missingPaths).toEqual(result.missingInputs);
+    expect(
+      missingFindings.every((finding) => !("evidenceIds" in finding)),
+    ).toBe(true);
+  });
+
+  it("calculates complete provisional totals but requires review", () => {
+    const request = requestWith({
+      discounts: 650,
+      paymentCost: 375,
+    });
+    request.observationState = "provisional";
+
+    const result = evaluateMarginLeak(request);
+
+    expect(result).toMatchObject({
+      assessment: "indeterminate",
+      completeness: "complete",
+      totals: {
+        expectedContributionMargin: { amountMinor: 4_900, currency: "USD" },
+        observedContributionMargin: { amountMinor: 4_675, currency: "USD" },
+        netContributionVariance: { amountMinor: 225, currency: "USD" },
+        leakAmount: { amountMinor: 225, currency: "USD" },
+      },
+      humanReview: {
+        required: true,
+        reasonCodes: ["MARGINLEAK_PROVISIONAL_INPUTS"],
+      },
+    });
+    expect(result.findings).toContainEqual({
+      code: "PROVISIONAL_FINANCIAL_INPUTS",
+      impact: "uncertain",
+      fieldPath: "/observationState",
+    });
   });
 });

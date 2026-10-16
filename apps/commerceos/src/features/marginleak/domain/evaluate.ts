@@ -36,19 +36,35 @@ type VarianceFinding = {
   evidenceIds: [string, string];
 };
 
+type MissingInputFinding = {
+  code: "MISSING_FINANCIAL_INPUT";
+  impact: "uncertain";
+  fieldPath: string;
+};
+
+type ProvisionalInputFinding = {
+  code: "PROVISIONAL_FINANCIAL_INPUTS";
+  impact: "uncertain";
+  fieldPath: "/observationState";
+};
+
+type MarginLeakFinding =
+  VarianceFinding | MissingInputFinding | ProvisionalInputFinding;
+
 type MarginLeakResult = {
-  assessment: "leak_detected" | "no_leak_detected";
-  completeness: "complete";
+  assessment: "leak_detected" | "no_leak_detected" | "indeterminate";
+  completeness: "complete" | "incomplete";
   currency: string;
   observationState: "final" | "provisional";
   rulesetVersion: typeof MARGIN_LEAK_RULESET_VERSION;
   componentBreakdown: ComponentBreakdown[];
-  findings: VarianceFinding[];
+  findings: MarginLeakFinding[];
+  missingInputs: string[];
   totals: {
-    expectedContributionMargin: Money;
-    observedContributionMargin: Money;
-    netContributionVariance: Money;
-    leakAmount: Money;
+    expectedContributionMargin: Money | null;
+    observedContributionMargin: Money | null;
+    netContributionVariance: Money | null;
+    leakAmount: Money | null;
   };
   humanReview: {
     required: boolean;
@@ -70,17 +86,31 @@ const money = (amountMinor: number, currency: string): Money => ({
   currency,
 });
 
+const emptyTotals = (): MarginLeakResult["totals"] => ({
+  expectedContributionMargin: null,
+  observedContributionMargin: null,
+  netContributionVariance: null,
+  leakAmount: null,
+});
+
 export const evaluateMarginLeak = (
   request: MarginLeakPrototypeRequest,
 ): MarginLeakResult => {
   let expectedContributionMargin = 0;
   let observedContributionMargin = 0;
-  const findings: VarianceFinding[] = [];
+  const findings: MarginLeakFinding[] = [];
+  const missingInputs: string[] = [];
+  const componentBreakdown: ComponentBreakdown[] = [];
 
-  const componentBreakdown = FINANCIAL_CATEGORIES.map((category) => {
-    const component = request.financials[category]!;
-    const expected = component.expected!;
-    const observed = component.observed!;
+  for (const category of FINANCIAL_CATEGORIES) {
+    const component = request.financials[category];
+    const expected = component?.expected;
+    const observed = component?.observed;
+
+    if (!expected) missingInputs.push(`/financials/${category}/expected`);
+    if (!observed) missingInputs.push(`/financials/${category}/observed`);
+    if (!expected || !observed) continue;
+
     const sign = CONTRIBUTION_ROLES[category];
     const expectedContribution = exactInteger(
       expected.amountMinor * sign,
@@ -125,33 +155,44 @@ export const evaluateMarginLeak = (
       });
     }
 
-    return {
+    componentBreakdown.push({
       category,
-      role: sign === 1 ? ("revenue" as const) : ("deduction" as const),
+      role: sign === 1 ? "revenue" : "deduction",
       expected: money(expected.amountMinor, request.currency),
       observed: money(observed.amountMinor, request.currency),
       direction,
       varianceAmount,
       expectedEvidenceId: expected.evidenceId,
       observedEvidenceId: observed.evidenceId,
-    };
-  });
+    });
+  }
 
-  const netContributionVariance = exactInteger(
-    expectedContributionMargin - observedContributionMargin,
-    "Net contribution variance",
+  findings.push(
+    ...missingInputs.map((fieldPath): MissingInputFinding => ({
+      code: "MISSING_FINANCIAL_INPUT",
+      impact: "uncertain",
+      fieldPath,
+    })),
   );
-  const leakDetected = netContributionVariance > 0;
 
-  return {
-    assessment: leakDetected ? "leak_detected" : "no_leak_detected",
-    completeness: "complete",
-    currency: request.currency,
-    observationState: request.observationState,
-    rulesetVersion: MARGIN_LEAK_RULESET_VERSION,
-    componentBreakdown,
-    findings,
-    totals: {
+  const incomplete = missingInputs.length > 0;
+  const provisional = request.observationState === "provisional";
+  if (provisional) {
+    findings.push({
+      code: "PROVISIONAL_FINANCIAL_INPUTS",
+      impact: "uncertain",
+      fieldPath: "/observationState",
+    });
+  }
+
+  let totals = emptyTotals();
+  let netContributionVariance: number | null = null;
+  if (!incomplete) {
+    netContributionVariance = exactInteger(
+      expectedContributionMargin - observedContributionMargin,
+      "Net contribution variance",
+    );
+    totals = {
       expectedContributionMargin: money(
         expectedContributionMargin,
         request.currency,
@@ -162,10 +203,36 @@ export const evaluateMarginLeak = (
       ),
       netContributionVariance: money(netContributionVariance, request.currency),
       leakAmount: money(Math.max(netContributionVariance, 0), request.currency),
-    },
+    };
+  }
+
+  const assessment =
+    incomplete || provisional
+      ? "indeterminate"
+      : netContributionVariance! > 0
+        ? "leak_detected"
+        : "no_leak_detected";
+  const reasonCodes = [
+    ...(incomplete ? ["MARGINLEAK_EVIDENCE_INCOMPLETE"] : []),
+    ...(provisional ? ["MARGINLEAK_PROVISIONAL_INPUTS"] : []),
+    ...(!incomplete && !provisional && assessment === "leak_detected"
+      ? ["MARGINLEAK_LEAK_DETECTED"]
+      : []),
+  ];
+
+  return {
+    assessment,
+    completeness: incomplete ? "incomplete" : "complete",
+    currency: request.currency,
+    observationState: request.observationState,
+    rulesetVersion: MARGIN_LEAK_RULESET_VERSION,
+    componentBreakdown,
+    findings,
+    missingInputs,
+    totals,
     humanReview: {
-      required: leakDetected,
-      reasonCodes: leakDetected ? ["MARGINLEAK_LEAK_DETECTED"] : [],
+      required: reasonCodes.length > 0,
+      reasonCodes,
       decidedBy: "deterministic_policy",
       policyVersion: MARGIN_LEAK_REVIEW_POLICY_VERSION,
     },
