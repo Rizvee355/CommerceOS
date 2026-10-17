@@ -7982,6 +7982,7 @@
     },
     "/api/v1/marginleak/analyze": {
       "post": {
+        "description": "Available only in development and test runtimes. Production requests are denied before payload processing.",
         "operationId": "analyzeMarginLeak",
         "requestBody": {
           "content": {
@@ -8005,6 +8006,9 @@
             "description": "MarginLeak deterministic evaluation"
           },
           "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "403": {
             "$ref": "#/components/responses/ErrorResponse"
           },
           "413": {

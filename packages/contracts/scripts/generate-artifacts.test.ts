@@ -41,6 +41,24 @@ describe("contract artifact generation", () => {
     ).toBe(true);
   });
 
+  it("documents production-denied MarginLeak preview access", () => {
+    const artifacts = createArtifacts();
+    const openapi = artifacts.get("openapi/openapi.json") as {
+      paths: {
+        "/api/v1/marginleak/analyze": {
+          post: {
+            description: string;
+            responses: Record<string, unknown>;
+          };
+        };
+      };
+    };
+    const operation = openapi.paths["/api/v1/marginleak/analyze"].post;
+
+    expect(operation.description).toContain("development and test");
+    expect(operation.responses).toHaveProperty("403");
+  });
+
   it("derives integer money and ISO currency constraints from Zod", () => {
     const artifacts = createArtifacts();
     const money = artifacts.get("json-schema/money.schema.json") as {

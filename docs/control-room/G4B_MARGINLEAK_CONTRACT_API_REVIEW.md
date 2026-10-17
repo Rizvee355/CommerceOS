@@ -6,7 +6,7 @@ MarginLeak G4B is a versioned contract and synthetic-analysis API candidate. It 
 
 ## API purpose
 
-`POST /api/v1/marginleak/analyze` accepts source-backed synthetic financial evidence for one order in one currency and returns a deterministic contribution-margin variance assessment. It does not perform accounting close, reconciliation, persistence, authentication, commerce integration, or AI inference.
+`POST /api/v1/marginleak/analyze` accepts source-backed synthetic financial evidence for one order in one currency and returns a deterministic contribution-margin variance assessment in development and test runtimes only. Production requests receive a sanitized `403` before the payload is read. The route does not perform accounting close, reconciliation, persistence, authentication, commerce integration, or AI inference.
 
 ```text
 synthetic evidence
@@ -344,13 +344,15 @@ The error never echoes the invalid value or an internal stack. Transport status 
 - The local G4A fixtures keep `prototypeVersion: "g4a.1"`; the external canonical API uses `schemaVersion: "1.0"`.
 - The capability registry remains unchanged with MarginLeak `planned` and no advertised routes.
 
-The preview route may exist while the capability remains planned because the route is a review artifact for synthetic contract validation. Registry state represents production readiness and user availability, neither of which G4B grants.
+The preview route may exist while the capability remains planned because it is a development/test review artifact for synthetic contract validation. Registry state represents production readiness and user availability, neither of which G4B grants. The route independently fails closed outside `development` and `test`; registry state is not used as an access-control mechanism.
 
 ## Security assessment and production blockers
 
 Implemented controls:
 
 - strict schemas reject unknown fields and non-synthetic scenarios;
+- an explicit runtime allowlist permits only `development` and `test`, before request-body processing;
+- production and unknown runtimes return a sanitized `403`, and no public or private enable flag overrides that boundary;
 - request currency must match every observation;
 - evidence identifiers must be unique;
 - response totals, category roles, directions, findings, evidence paths, and review reasons are reconciled before emission;
@@ -364,7 +366,7 @@ Implemented controls:
 
 Deployment blockers:
 
-- no authentication or authorization;
+- no approved production authentication or authorization design; production access therefore remains disabled;
 - no tenant isolation;
 - no rate limiting or abuse protection;
 - no production source authority or evidence-ingestion policy;
@@ -405,8 +407,8 @@ The adapter may explain findings, rank merchant-actionable mitigations, state un
 - Canonical contract tests cover strict parsing, versions, currency, timestamps, duplicate evidence, amount boundaries, aggregate/category reconciliation, provenance, finding/review contradictions, and generic-envelope compatibility.
 - G4A.2 domain tests preserve negative-contribution semantics and independently cross-check safe aggregate extremes with `BigInt`.
 - Orchestrator tests cover final leak, final no-leak, incomplete, provisional, metadata, and evidence references.
-- Route tests cover valid outcomes, validation classes, declared and streamed size limits, invalid UTF-8, error sanitization, and governance state.
-- Playwright sends the canonical fixture through the built Next.js server and verifies unsupported GET behavior. This is HTTP API coverage, not MarginLeak frontend coverage.
+- Route tests cover valid test-runtime outcomes, production denial before parsing, validation classes, declared and streamed size limits, invalid UTF-8, error sanitization, and governance state.
+- Playwright sends the canonical fixture through the built production Next.js server and verifies both `403` preview denial and unsupported GET behavior. This is HTTP API coverage, not MarginLeak frontend coverage.
 
 Final command counts and GitHub CI status belong in the PR verification record after the complete quality gate.
 
@@ -434,12 +436,12 @@ pnpm test:e2e
 pnpm security:deps
 ```
 
-Start the built application in a separate PowerShell window:
+Start an authorized loopback-only development preview in a separate PowerShell window:
 
 ```powershell
 Set-Location -LiteralPath 'D:\AI\Workspaces\CommerceOS-Codex'
 $env:INFERENCE_PROVIDER = 'disabled'
-pnpm --filter '@commerceos/app' start --hostname 127.0.0.1
+pnpm --filter '@commerceos/app' dev --hostname 127.0.0.1
 ```
 
 Submit the canonical synthetic fixture:
@@ -452,3 +454,5 @@ $response | ConvertTo-Json -Depth 20
 ```
 
 No secret, API key, customer record, or external service is required.
+
+`pnpm start` runs the production runtime and always denies this route with `403`, including when `MARGINLEAK_PREVIEW_ENABLED` or any client field claims access. Do not expose the development server beyond loopback. A future production route requires a separately approved authentication, authorization, tenant, and abuse-control design.

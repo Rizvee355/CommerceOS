@@ -1,4 +1,4 @@
-import { marginLeakEvaluationResponseSchema } from "@commerceos/contracts";
+import { errorEnvelopeSchema } from "@commerceos/contracts";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
@@ -13,7 +13,7 @@ const requestFixture = JSON.parse(
   ),
 );
 
-test("MarginLeak synthetic preview evaluates a real HTTP request", async ({
+test("MarginLeak synthetic preview is denied by the production server", async ({
   request,
 }) => {
   const response = await request.post("/api/v1/marginleak/analyze", {
@@ -21,23 +21,16 @@ test("MarginLeak synthetic preview evaluates a real HTTP request", async ({
   });
   const body: unknown = await response.json();
 
-  expect(response.status()).toBe(200);
-  expect(marginLeakEvaluationResponseSchema.safeParse(body).success).toBe(true);
+  expect(response.status()).toBe(403);
+  expect(errorEnvelopeSchema.safeParse(body).success).toBe(true);
   expect(body).toMatchObject({
-    moduleId: "marginleak",
-    analysisStatus: "complete",
-    deterministic: {
-      data: {
-        assessment: "no_leak_detected",
-        totals: {
-          expectedContributionMargin: { amountMinor: 4_900, currency: "USD" },
-          observedContributionMargin: { amountMinor: 5_200, currency: "USD" },
-          netContributionVariance: { amountMinor: -300, currency: "USD" },
-          leakAmount: { amountMinor: 0, currency: "USD" },
-        },
-      },
+    error: {
+      code: "MARGINLEAK_PREVIEW_UNAVAILABLE",
+      category: "authorization",
+      retryable: false,
     },
   });
+  expect(JSON.stringify(body)).not.toContain(requestFixture.orderRef);
 });
 
 test("MarginLeak preview rejects unsupported GET requests", async ({

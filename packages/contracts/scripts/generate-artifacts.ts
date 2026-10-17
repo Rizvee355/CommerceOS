@@ -129,6 +129,8 @@ export const createArtifacts = (): Map<string, unknown> => {
         post: {
           operationId: "analyzeMarginLeak",
           summary: "Evaluate synthetic contribution-margin evidence",
+          description:
+            "Available only in development and test runtimes. Production requests are denied before payload processing.",
           requestBody: {
             required: true,
             content: {
@@ -151,6 +153,7 @@ export const createArtifacts = (): Map<string, unknown> => {
               },
             },
             "400": { $ref: "#/components/responses/ErrorResponse" },
+            "403": { $ref: "#/components/responses/ErrorResponse" },
             "413": { $ref: "#/components/responses/ErrorResponse" },
             "415": { $ref: "#/components/responses/ErrorResponse" },
             "422": { $ref: "#/components/responses/ErrorResponse" },

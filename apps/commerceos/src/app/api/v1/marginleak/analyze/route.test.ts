@@ -7,7 +7,7 @@ import {
 } from "@commerceos/contracts";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { analyzeMarginLeak } from "../../../../../features/marginleak/server/analyze";
 import { createCapabilitiesResponse } from "../../../../../server/api/responses";
@@ -49,7 +49,38 @@ const requestFor = (body: string, contentType = "application/json") =>
     body,
   });
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe("POST /api/v1/marginleak/analyze", () => {
+  it("denies production preview access before parsing regardless of flags or request fields", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("MARGINLEAK_PREVIEW_ENABLED", "true");
+    const orderRef = fixture().orderRef;
+    const response = await createMarginLeakAnalyzeHandler(dependencies())(
+      requestFor(
+        JSON.stringify({
+          ...fixture(),
+          previewAccess: true,
+        }),
+      ),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(errorEnvelopeSchema.safeParse(body).success).toBe(true);
+    expect(body).toMatchObject({
+      error: {
+        code: "MARGINLEAK_PREVIEW_UNAVAILABLE",
+        category: "authorization",
+        retryable: false,
+      },
+    });
+    expect(JSON.stringify(body)).not.toContain(orderRef);
+    expect(JSON.stringify(body)).not.toContain("MARGINLEAK_PREVIEW_ENABLED");
+  });
+
   it("runs a complete synthetic request through the real evaluator", async () => {
     const response = await createMarginLeakAnalyzeHandler(dependencies())(
       requestFor(JSON.stringify(fixture())),

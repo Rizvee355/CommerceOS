@@ -43,9 +43,25 @@ const validationPath = (path: PropertyKey[]): string => {
     .join("/")}`;
 };
 
+const isPreviewRuntimeAllowed = (): boolean =>
+  process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
+
 export const createMarginLeakAnalyzeHandler =
   (dependencies: MarginLeakRouteDependencies = defaultDependencies) =>
   async (request: Request): Promise<Response> => {
+    if (!isPreviewRuntimeAllowed()) {
+      return errorResponse(
+        403,
+        {
+          code: "MARGINLEAK_PREVIEW_UNAVAILABLE",
+          category: "authorization",
+          message: "The MarginLeak synthetic preview is unavailable.",
+          retryable: false,
+        },
+        dependencies,
+      );
+    }
+
     const body = await readJsonRequest(request);
     if (body.status === "unsupported_media_type") {
       return errorResponse(
