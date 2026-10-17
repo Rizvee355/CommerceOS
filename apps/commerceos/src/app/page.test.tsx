@@ -26,7 +26,7 @@ describe("CommerceOS overview", () => {
     expect(within(rescueCart).queryByRole("link")).not.toBeInTheDocument();
 
     expect(screen.getByText("AMD connection pending")).toBeInTheDocument();
-    expect(screen.getByText("No product analysis yet")).toBeInTheDocument();
+    expect(screen.getByText("Synthetic preview available")).toBeInTheDocument();
     expect(
       screen.queryByText(/revenue|orders evaluated|margin saved/i),
     ).not.toBeInTheDocument();
