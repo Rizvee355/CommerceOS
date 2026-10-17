@@ -1,6 +1,10 @@
 "use client";
 
-export function AiBoundaryPanel() {
+type AiBoundaryPanelProps = {
+  rulesetVersion: string;
+};
+
+export function AiBoundaryPanel({ rulesetVersion }: AiBoundaryPanelProps) {
   return (
     <section
       className="ml-governance-card ml-ai-boundary-card"
@@ -19,17 +23,18 @@ export function AiBoundaryPanel() {
         Why AI never calculates financial variance
       </h3>
       <p className="ml-governance-copy">
-        Unlike PromiseGuard (which pairs deterministic SLA rules with advisory
-        AI mitigation), the <strong>MarginLeak v1.0 contract</strong> omits{" "}
-        <code>aiRecommendation</code> and <code>inference</code> fields by
-        design:
+        Unlike PromiseGuard (whose contract includes optional,
+        disabled-by-default advisory AI recommendation slots alongside
+        deterministic SLA rules), the <strong>MarginLeak v1.0 contract</strong>{" "}
+        omits <code>aiRecommendation</code> and <code>inference</code> fields
+        entirely by design:
       </p>
       <ul className="ml-boundary-list">
         <li>
           <strong>100% deterministic integer math:</strong> Contribution
           margins, signed variances, and leak amounts are computed exclusively
-          in exact minor currency units by ruleset{" "}
-          <code>marginleak-deterministic-v1</code>.
+          in exact minor currency units by ruleset <code>{rulesetVersion}</code>
+          .
         </li>
         <li>
           <strong>Zero hallucinated recoveries:</strong> AI models never invent

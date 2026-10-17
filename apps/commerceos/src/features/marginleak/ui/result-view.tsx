@@ -58,7 +58,9 @@ export function ResultView({
 
       <div className="ml-governance-grid">
         <HumanReviewPanel humanReview={response.humanReview} />
-        <AiBoundaryPanel />
+        <AiBoundaryPanel
+          rulesetVersion={response.deterministic.rulesetVersion}
+        />
       </div>
 
       <ProvenanceFooter response={response} />

@@ -90,6 +90,12 @@ test.describe("MarginLeak development synthetic preview end-to-end & visual evid
     await expect(page.locator('[data-kpi="leak-amount"]')).toContainText(
       "$5.50",
     );
+    await expect(page.locator(".ml-ai-boundary-card")).toContainText(
+      "marginleak-contribution-g4a.1",
+    );
+    await expect(page.locator(".ml-ai-boundary-card")).not.toContainText(
+      "marginleak-deterministic-v1",
+    );
     await assertZeroHorizontalOverflow(page, "1440px Scenario 1");
 
     await page.screenshot({

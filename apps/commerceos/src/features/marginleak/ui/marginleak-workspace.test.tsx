@@ -72,6 +72,22 @@ describe("MarginLeakWorkspace integration with real server route handler", () =>
     expect(screen.getByText("Human Review Required")).toBeTruthy();
     expect(screen.getByText("MARGINLEAK_LEAK_DETECTED")).toBeTruthy();
     expect(screen.getByText("Deterministic-Only Contract (G4)")).toBeTruthy();
+
+    const aiBoundaryCard = document.querySelector(
+      ".ml-ai-boundary-card",
+    ) as HTMLElement;
+    expect(aiBoundaryCard).toBeTruthy();
+    expect(
+      within(aiBoundaryCard).getByText("marginleak-contribution-g4a.1"),
+    ).toBeTruthy();
+    expect(aiBoundaryCard.textContent).not.toContain(
+      "marginleak-deterministic-v1",
+    );
+    expect(
+      within(aiBoundaryCard).getByText(
+        /optional, disabled-by-default advisory AI recommendation slots/i,
+      ),
+    ).toBeTruthy();
   });
 
   it("evaluates Scenario 2 (No leak / favorable offset) with negative signed variance and $0.00 leak", async () => {
