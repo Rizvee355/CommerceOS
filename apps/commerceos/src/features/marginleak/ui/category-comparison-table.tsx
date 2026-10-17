@@ -329,7 +329,7 @@ export function CategoryComparisonTable({
               className={`ml-mobile-comp-card ml-mobile-comp-${comp.direction}`}
             >
               <div className="ml-mobile-comp-top">
-                <div>
+                <div className="ml-cell-cat">
                   <strong>{meta.label}</strong>
                   <span className="ml-cell-role">{meta.signLabel}</span>
                 </div>

@@ -10,10 +10,12 @@ import {
 
 type ContributionTotalsStripProps = {
   data: MarginLeakDeterministicData;
+  scenarioId?: string;
 };
 
 export function ContributionTotalsStrip({
   data,
+  scenarioId,
 }: ContributionTotalsStripProps) {
   const { totals, evidenceCompleteness, observationState } = data;
 
@@ -31,6 +33,7 @@ export function ContributionTotalsStrip({
 
   const isNegativeObservedMargin =
     observedMargin !== null && observedMargin.amountMinor < 0;
+  const isExplicitLossLeaderScenario = scenarioId === "ml-loss-leader-no-leak";
 
   return (
     <div
@@ -57,7 +60,9 @@ export function ContributionTotalsStrip({
             </span>
             {expectedMargin.amountMinor < 0 && (
               <span className="ml-kpi-note">
-                Planned negative-margin order (loss-leader baseline)
+                {isExplicitLossLeaderScenario
+                  ? "Synthetic loss-leader scenario baseline (negative expected contribution margin)"
+                  : "Negative expected contribution margin (expected deductions exceed expected revenue)"}
               </span>
             )}
           </>

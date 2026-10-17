@@ -3556,4 +3556,8 @@ li[data-tone="waiting"] .rail-dot {
   .ml-form-toolbar .pg-btn {
     width: 100%;
   }
+  .ml-hero .mission-tag {
+    max-width: none;
+    text-align: left;
+  }
 }

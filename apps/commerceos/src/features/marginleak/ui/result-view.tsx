@@ -47,7 +47,10 @@ export function ResultView({
 
       <AssessmentBanner response={response} />
 
-      <ContributionTotalsStrip data={data} />
+      <ContributionTotalsStrip
+        data={data}
+        scenarioId={response.scenario.scenarioId}
+      />
 
       <CategoryComparisonTable data={data} onJumpToField={onJumpToField} />
 

@@ -174,26 +174,44 @@ export function MarginLeakWorkspace({ fetchImpl }: MarginLeakWorkspaceProps) {
     );
   };
 
+  const activePresetScenarioId =
+    createMarginLeakPreset(selectedPreset).scenario.scenarioId;
+
   const handleUpdateOrderRef = (value: string) => {
     invalidateInFlightAndResults();
-    setDraft((prev) => ({ ...prev, orderRef: value }));
+    setDraft((prev) => ({
+      ...prev,
+      scenarioId: activePresetScenarioId,
+      orderRef: value,
+    }));
     setIsDirty(true);
+    setIsLossLeaderLoaded(false);
     setFieldErrors((prev) => prev.filter((e) => e.key !== "orderRef"));
     setStatus("idle");
   };
 
   const handleUpdateCurrency = (value: string) => {
     invalidateInFlightAndResults();
-    setDraft((prev) => ({ ...prev, currency: value }));
+    setDraft((prev) => ({
+      ...prev,
+      scenarioId: activePresetScenarioId,
+      currency: value,
+    }));
     setIsDirty(true);
+    setIsLossLeaderLoaded(false);
     setFieldErrors((prev) => prev.filter((e) => e.key !== "currency"));
     setStatus("idle");
   };
 
   const handleUpdateObservationState = (value: MarginLeakObservationState) => {
     invalidateInFlightAndResults();
-    setDraft((prev) => ({ ...prev, observationState: value }));
+    setDraft((prev) => ({
+      ...prev,
+      scenarioId: activePresetScenarioId,
+      observationState: value,
+    }));
     setIsDirty(true);
+    setIsLossLeaderLoaded(false);
     setFieldErrors((prev) => prev.filter((e) => e.key !== "observationState"));
     setStatus("idle");
   };
@@ -206,6 +224,7 @@ export function MarginLeakWorkspace({ fetchImpl }: MarginLeakWorkspaceProps) {
     invalidateInFlightAndResults();
     setDraft((prev) => ({
       ...prev,
+      scenarioId: activePresetScenarioId,
       financials: {
         ...prev.financials,
         [category]: {
@@ -218,6 +237,7 @@ export function MarginLeakWorkspace({ fetchImpl }: MarginLeakWorkspaceProps) {
       },
     }));
     setIsDirty(true);
+    setIsLossLeaderLoaded(false);
     const prefix = `financials.${category}.${side}.`;
     setFieldErrors((prev) => prev.filter((e) => !e.key.startsWith(prefix)));
     setStatus("idle");

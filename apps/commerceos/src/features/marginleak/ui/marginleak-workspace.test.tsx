@@ -185,7 +185,7 @@ describe("MarginLeakWorkspace integration with real server route handler", () =>
     expect(screen.getByText(/Complete \(16\/16 observations\)/i)).toBeTruthy();
   });
 
-  it("evaluates the negative-margin loss-leader helper (-$2.00 expected, -$1.00 observed) as no_leak_detected with $0.00 leak", async () => {
+  it("evaluates the negative-margin loss-leader helper (-$2.00 expected, -$1.00 observed) as no_leak_detected with $0.00 leak and clears the helper banner when edited", async () => {
     render(<MarginLeakWorkspace fetchImpl={createRealRouteFetch()} />);
 
     fireEvent.click(
@@ -193,6 +193,10 @@ describe("MarginLeakWorkspace integration with real server route handler", () =>
         name: /Load loss-leader example \(-\$1\.00 margin\)/i,
       }),
     );
+
+    expect(
+      screen.getByText(/Negative-margin loss-leader helper loaded:/i),
+    ).toBeTruthy();
 
     fireEvent.click(
       screen.getAllByRole("button", { name: /Run Margin Analysis/i })[0]!,
@@ -216,6 +220,11 @@ describe("MarginLeakWorkspace integration with real server route handler", () =>
     ) as HTMLElement;
 
     expect(within(expectedCard).getByText("-$2.00")).toBeTruthy();
+    expect(
+      within(expectedCard).getByText(
+        "Synthetic loss-leader scenario baseline (negative expected contribution margin)",
+      ),
+    ).toBeTruthy();
     expect(within(observedCard).getByText("-$1.00")).toBeTruthy();
     expect(
       within(observedCard).getByText(
@@ -226,6 +235,35 @@ describe("MarginLeakWorkspace integration with real server route handler", () =>
       within(varianceCard).getByText("-$1.00 · Favorable to expected margin"),
     ).toBeTruthy();
     expect(within(leakCard).getByText("$0.00")).toBeTruthy();
+
+    // Editing a financial input clears the loss-leader helper banner and does not claim planned loss-leader
+    const grossExpectedInput = document.getElementById(
+      "ml-field-financials-grossItemRevenue-expected-amountMinor",
+    ) as HTMLInputElement;
+    fireEvent.change(grossExpectedInput, { target: { value: "9900" } });
+
+    expect(
+      screen.queryByText(/Negative-margin loss-leader helper loaded:/i),
+    ).toBeNull();
+
+    fireEvent.click(
+      screen.getAllByRole("button", { name: /Run Margin Analysis/i })[0]!,
+    );
+
+    await screen.findByRole("heading", {
+      name: /Contribution-margin evaluation results/i,
+    });
+
+    const updatedExpectedCard = document.querySelector(
+      '[data-kpi="expected-margin"]',
+    ) as HTMLElement;
+    expect(within(updatedExpectedCard).getByText("-$3.00")).toBeTruthy();
+    expect(
+      within(updatedExpectedCard).getByText(
+        "Negative expected contribution margin (expected deductions exceed expected revenue)",
+      ),
+    ).toBeTruthy();
+    expect(updatedExpectedCard.textContent).not.toContain("loss-leader");
   });
 
   it("clears stale evaluation results immediately upon editing any input or resetting the scenario", async () => {
