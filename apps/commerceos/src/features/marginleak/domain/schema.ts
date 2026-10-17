@@ -1,33 +1,20 @@
-import { currencyCodeSchema } from "@commerceos/contracts";
+import {
+  currencyCodeSchema,
+  MARGIN_LEAK_CONTRIBUTION_ROLES,
+  MARGIN_LEAK_FINANCIAL_CATEGORIES,
+  MARGIN_LEAK_MAX_COMPONENT_AMOUNT_MINOR,
+  type MarginLeakEvaluationRequest,
+} from "@commerceos/contracts";
 import { z } from "zod";
 
-export const FINANCIAL_CATEGORIES = [
-  "grossItemRevenue",
-  "shippingRevenue",
-  "discounts",
-  "cogs",
-  "shippingCost",
-  "fulfillmentCost",
-  "paymentCost",
-  "platformCost",
-] as const;
+export const FINANCIAL_CATEGORIES = MARGIN_LEAK_FINANCIAL_CATEGORIES;
 
 export type FinancialCategory = (typeof FINANCIAL_CATEGORIES)[number];
 
-export const CONTRIBUTION_ROLES = {
-  grossItemRevenue: 1,
-  shippingRevenue: 1,
-  discounts: -1,
-  cogs: -1,
-  shippingCost: -1,
-  fulfillmentCost: -1,
-  paymentCost: -1,
-  platformCost: -1,
-} as const satisfies Record<FinancialCategory, 1 | -1>;
+export const CONTRIBUTION_ROLES = MARGIN_LEAK_CONTRIBUTION_ROLES;
 
-export const MAX_COMPONENT_AMOUNT_MINOR = Math.floor(
-  Number.MAX_SAFE_INTEGER / (FINANCIAL_CATEGORIES.length * 2),
-);
+export const MAX_COMPONENT_AMOUNT_MINOR =
+  MARGIN_LEAK_MAX_COMPONENT_AMOUNT_MINOR;
 
 const opaqueIdSchema = z.string().trim().min(1).max(128);
 const sourceLabelSchema = z.string().trim().min(1).max(160);
@@ -117,4 +104,9 @@ export const marginLeakPrototypeRequestSchema = z
 
 export type MarginLeakPrototypeRequest = z.infer<
   typeof marginLeakPrototypeRequestSchema
+>;
+
+export type MarginLeakEvaluationInput = Pick<
+  MarginLeakEvaluationRequest,
+  "currency" | "observationState" | "financials"
 >;

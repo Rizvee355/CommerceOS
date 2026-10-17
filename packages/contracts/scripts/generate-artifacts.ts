@@ -12,6 +12,8 @@ import {
   healthResponseSchema,
   humanReviewMetadataSchema,
   inferenceMetadataSchema,
+  marginLeakEvaluationRequestSchema,
+  marginLeakEvaluationResponseSchema,
   moneySchema,
   promiseGuardEvaluationRequestSchema,
   promiseGuardEvaluationResponseSchema,
@@ -29,6 +31,8 @@ const schemaDefinitions = {
   HealthResponse: healthResponseSchema,
   HumanReviewMetadata: humanReviewMetadataSchema,
   InferenceMetadata: inferenceMetadataSchema,
+  MarginLeakEvaluationRequest: marginLeakEvaluationRequestSchema,
+  MarginLeakEvaluationResponse: marginLeakEvaluationResponseSchema,
   Money: moneySchema,
   PromiseGuardEvaluationRequest: promiseGuardEvaluationRequestSchema,
   PromiseGuardEvaluationResponse: promiseGuardEvaluationResponseSchema,
@@ -46,6 +50,8 @@ const fileNames: Record<keyof typeof schemaDefinitions, string> = {
   HealthResponse: "health-response.schema.json",
   HumanReviewMetadata: "human-review-metadata.schema.json",
   InferenceMetadata: "inference-metadata.schema.json",
+  MarginLeakEvaluationRequest: "marginleak-evaluation-request.schema.json",
+  MarginLeakEvaluationResponse: "marginleak-evaluation-response.schema.json",
   Money: "money.schema.json",
   PromiseGuardEvaluationRequest: "promiseguard-evaluation-request.schema.json",
   PromiseGuardEvaluationResponse:
@@ -84,7 +90,7 @@ export const createArtifacts = (): Map<string, unknown> => {
       title: "CommerceOS API",
       version: "1.0.0",
       description:
-        "CommerceOS foundation endpoints and the approved synthetic-only PromiseGuard analysis operation.",
+        "CommerceOS foundation endpoints and synthetic-only analysis operations.",
     },
     paths: {
       "/api/v1/capabilities": {
@@ -116,6 +122,42 @@ export const createArtifacts = (): Map<string, unknown> => {
                 },
               },
             },
+          },
+        },
+      },
+      "/api/v1/marginleak/analyze": {
+        post: {
+          operationId: "analyzeMarginLeak",
+          summary: "Evaluate synthetic contribution-margin evidence",
+          description:
+            "Available only in development and test runtimes. Production requests are denied before payload processing.",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  $ref: "#/components/schemas/MarginLeakEvaluationRequest",
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "MarginLeak deterministic evaluation",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/MarginLeakEvaluationResponse",
+                  },
+                },
+              },
+            },
+            "400": { $ref: "#/components/responses/ErrorResponse" },
+            "403": { $ref: "#/components/responses/ErrorResponse" },
+            "413": { $ref: "#/components/responses/ErrorResponse" },
+            "415": { $ref: "#/components/responses/ErrorResponse" },
+            "422": { $ref: "#/components/responses/ErrorResponse" },
+            "500": { $ref: "#/components/responses/ErrorResponse" },
           },
         },
       },

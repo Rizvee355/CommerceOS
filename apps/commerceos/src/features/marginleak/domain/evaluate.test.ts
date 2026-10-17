@@ -194,6 +194,22 @@ describe("MarginLeak deterministic evaluator", () => {
     );
   });
 
+  it("confirms an adverse variance of exactly one minor unit", () => {
+    const result = evaluateMarginLeak(
+      requestWith({ grossItemRevenue: expectedAmounts.grossItemRevenue - 1 }),
+    );
+
+    expect(result).toMatchObject({
+      assessment: "leak_detected",
+      totals: {
+        expectedContributionMargin: { amountMinor: 4_900, currency: "USD" },
+        observedContributionMargin: { amountMinor: 4_899, currency: "USD" },
+        netContributionVariance: { amountMinor: 1, currency: "USD" },
+        leakAmount: { amountMinor: 1, currency: "USD" },
+      },
+    });
+  });
+
   it("detects unfavorable variance when both contribution margins are negative", () => {
     const expected = {
       ...zeroAmounts(),
