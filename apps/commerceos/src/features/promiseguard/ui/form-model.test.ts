@@ -3,6 +3,7 @@ import { createPromiseGuardPreset } from "../domain/presets";
 import {
   focusKeyForFinding,
   keyForPointer,
+  mapServerFieldErrors,
   presetToDraft,
   validateDraft,
 } from "./form-model";
@@ -32,13 +33,13 @@ describe("PromiseGuard form model", () => {
     }
   });
 
-  it("catches validation errors on invalid draft fields", () => {
+  it("catches validation errors on invalid draft fields and boundary inputs", () => {
     const valid = presetToDraft(
       createPromiseGuardPreset("supported", asOf),
       "supported",
     );
 
-    // Empty fulfillment reference
+    // 1. Empty / whitespace-only fulfillment reference
     const emptyRef = { ...valid, fulfillmentRef: "   " };
     const resRef = validateDraft(emptyRef);
     expect(resRef.ok).toBe(false);
@@ -46,7 +47,17 @@ describe("PromiseGuard form model", () => {
       expect(resRef.errors.some((e) => e.key === "fulfillmentRef")).toBe(true);
     }
 
-    // Active blocker with no blocker codes
+    // 2. Oversized fulfillment reference (>128 chars)
+    const longRef = { ...valid, fulfillmentRef: "A".repeat(129) };
+    const resLongRef = validateDraft(longRef);
+    expect(resLongRef.ok).toBe(false);
+    if (!resLongRef.ok) {
+      expect(resLongRef.errors.some((e) => e.key === "fulfillmentRef")).toBe(
+        true,
+      );
+    }
+
+    // 3. Active blocker with no blocker codes
     const activeNoCodes = {
       ...valid,
       blocking: {
@@ -62,6 +73,67 @@ describe("PromiseGuard form model", () => {
         true,
       );
     }
+
+    // 4. Missing validUntil when validityUnknown is false
+    const missingValidUntil = {
+      ...valid,
+      inventory: {
+        ...valid.inventory,
+        validUntil: "",
+        validityUnknown: false,
+      },
+    };
+    const resValidUntil = validateDraft(missingValidUntil);
+    expect(resValidUntil.ok).toBe(false);
+    if (!resValidUntil.ok) {
+      expect(
+        resValidUntil.errors.some((e) => e.key === "inventory.validUntil"),
+      ).toBe(true);
+    }
+
+    // 5. Missing estimatedReadyAt when estimate.include is true
+    const missingEstimateReady = {
+      ...valid,
+      estimate: {
+        ...valid.estimate,
+        include: true,
+        estimatedReadyAt: "not-a-valid-date",
+      },
+    };
+    const resEstimate = validateDraft(missingEstimateReady);
+    expect(resEstimate.ok).toBe(false);
+    if (!resEstimate.ok) {
+      expect(
+        resEstimate.errors.some((e) => e.key === "estimate.estimatedReadyAt"),
+      ).toBe(true);
+    }
+  });
+
+  it("maps server field errors to form field keys and preserves unmapped errors", () => {
+    const mapped = mapServerFieldErrors([
+      { path: "/fulfillmentRef" },
+      {
+        path: "/operationalEvidence/blockingState/codes",
+      },
+      { path: "/unknownPointer" },
+    ]);
+
+    expect(mapped).toEqual([
+      {
+        key: "fulfillmentRef",
+        message:
+          "The server did not accept this value. Check it and try again.",
+      },
+      {
+        key: "blocking.codes",
+        message:
+          "The server did not accept this value. Check it and try again.",
+      },
+      {
+        key: null,
+        message: "The server did not accept the value at /unknownPointer.",
+      },
+    ]);
   });
 
   it("correctly maps JSON pointers to form keys", () => {

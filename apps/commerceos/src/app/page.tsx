@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SiteHeader } from "../components/site-header";
 import { moduleRegistry } from "../features/module-registry";
 
@@ -99,6 +100,11 @@ export default function HomePage() {
                 PromiseGuard features a functional backend evaluator and
                 synthetic preview route. Production activation, live AMD
                 inference, and persistent workflows remain pending.
+              </p>
+              <p className="state-panel-action">
+                <Link className="text-link" href="/promiseguard">
+                  Open synthetic workspace <span aria-hidden="true">→</span>
+                </Link>
               </p>
             </div>
           </article>

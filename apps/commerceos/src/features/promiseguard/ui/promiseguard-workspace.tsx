@@ -30,12 +30,25 @@ export type ClockSyncState =
   | { status: "synced"; timestamp: string; asOf: Date }
   | { status: "error"; message: string };
 
+const prefersReducedMotion = (): boolean => {
+  if (
+    typeof window === "undefined" ||
+    typeof window.matchMedia !== "function"
+  ) {
+    return false;
+  }
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+};
+
 const safeScrollIntoView = (
   el: HTMLElement | null,
-  options?: ScrollIntoViewOptions,
+  block: ScrollLogicalPosition = "start",
 ) => {
   if (typeof el?.scrollIntoView === "function") {
-    el.scrollIntoView(options);
+    el.scrollIntoView({
+      behavior: prefersReducedMotion() ? "auto" : "smooth",
+      block,
+    });
   }
 };
 
@@ -54,25 +67,58 @@ export const PromiseGuardWorkspace = () => {
     useState<PromiseGuardEvaluationRequest | null>(null);
   const [activeResponse, setActiveResponse] =
     useState<PromiseGuardEvaluationResponse | null>(null);
+  const [liveAnnouncement, setLiveAnnouncement] = useState<string>("");
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const clockAbortRef = useRef<AbortController | null>(null);
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const errorSummaryRef = useRef<HTMLDivElement | null>(null);
   const formHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const resultsHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const clockRequestIdRef = useRef(0);
   const analysisRequestIdRef = useRef(0);
+  const pendingPresetRef = useRef<PromiseGuardPresetId | null>("supported");
+
+  const clearFocusTimer = useCallback(() => {
+    if (focusTimerRef.current !== null) {
+      clearTimeout(focusTimerRef.current);
+      focusTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleFocusAndScroll = useCallback(
+    (
+      getTarget: () => HTMLElement | null,
+      block: ScrollLogicalPosition = "start",
+    ) => {
+      clearFocusTimer();
+      focusTimerRef.current = setTimeout(() => {
+        focusTimerRef.current = null;
+        const target = getTarget();
+        target?.focus();
+        safeScrollIntoView(target, block);
+      }, 30);
+    },
+    [clearFocusTimer],
+  );
 
   // Helper to invalidate any previous evaluation results
   const clearResults = useCallback(() => {
+    clearFocusTimer();
     setActiveResponse(null);
     setActiveRequest(null);
-  }, []);
+  }, [clearFocusTimer]);
 
   const syncServerClock = useCallback(
-    async (presetToApply?: PromiseGuardPresetId) => {
+    async (presetToApply?: PromiseGuardPresetId): Promise<boolean> => {
       clockAbortRef.current?.abort();
       const controller = new AbortController();
       clockAbortRef.current = controller;
+
+      const targetPreset = presetToApply ?? pendingPresetRef.current;
+      if (targetPreset) {
+        pendingPresetRef.current = targetPreset;
+      }
 
       const clockRequestId = ++clockRequestIdRef.current;
       setClockSyncState({ status: "syncing" });
@@ -80,7 +126,7 @@ export const PromiseGuardWorkspace = () => {
       const outcome = await fetchServerTime(controller.signal);
 
       // If a newer clock request or user edit arrived, discard this late response
-      if (clockRequestId !== clockRequestIdRef.current) return;
+      if (clockRequestId !== clockRequestIdRef.current) return false;
 
       if (outcome.ok) {
         setServerTimestamp(outcome.timestamp);
@@ -90,22 +136,25 @@ export const PromiseGuardWorkspace = () => {
           asOf: outcome.asOf,
         });
 
-        if (presetToApply) {
+        if (targetPreset) {
           setDraft(
             presetToDraft(
-              createPromiseGuardPreset(presetToApply, outcome.asOf),
-              presetToApply,
+              createPromiseGuardPreset(targetPreset, outcome.asOf),
+              targetPreset,
             ),
           );
+          pendingPresetRef.current = null;
         }
+        return true;
       } else {
-        if (outcome.kind === "cancelled") return;
+        if (outcome.kind === "cancelled") return false;
         setServerTimestamp(null);
         setClockSyncState({
           status: "error",
           message:
             "Failed to synchronize with CommerceOS server clock. Authoritative server time is required to evaluate synthetic presets.",
         });
+        return false;
       }
     },
     [],
@@ -118,6 +167,7 @@ export const PromiseGuardWorkspace = () => {
       const controller = new AbortController();
       clockAbortRef.current = controller;
       const clockRequestId = ++clockRequestIdRef.current;
+      pendingPresetRef.current = "supported";
 
       const outcome = await fetchServerTime(controller.signal);
       if (ignore || clockRequestId !== clockRequestIdRef.current) return;
@@ -135,6 +185,7 @@ export const PromiseGuardWorkspace = () => {
             "supported",
           ),
         );
+        pendingPresetRef.current = null;
       } else {
         if (outcome.kind === "cancelled") return;
         setServerTimestamp(null);
@@ -150,10 +201,11 @@ export const PromiseGuardWorkspace = () => {
 
     return () => {
       ignore = true;
+      clearFocusTimer();
       clockAbortRef.current?.abort();
       abortControllerRef.current?.abort();
     };
-  }, []);
+  }, [clearFocusTimer]);
 
   const handleSelectPreset = useCallback(
     async (presetId: PromiseGuardPresetId) => {
@@ -166,10 +218,16 @@ export const PromiseGuardWorkspace = () => {
       abortControllerRef.current?.abort();
       setIsAnalyzing(false);
 
+      pendingPresetRef.current = presetId;
       setSelectedPreset(presetId);
 
       // Fetch fresh server time to avoid skew, and populate preset
-      await syncServerClock(presetId);
+      const ok = await syncServerClock(presetId);
+      if (ok) {
+        setLiveAnnouncement(
+          `Loaded ${presetId.replace("_", " ")} scenario preset into the evidence form.`,
+        );
+      }
     },
     [clearResults, syncServerClock],
   );
@@ -184,14 +242,25 @@ export const PromiseGuardWorkspace = () => {
     abortControllerRef.current?.abort();
     setIsAnalyzing(false);
 
+    pendingPresetRef.current = selectedPreset;
+
     // Fetch fresh server time and reapply selected preset
-    await syncServerClock(selectedPreset);
+    const ok = await syncServerClock(selectedPreset);
+    if (ok) {
+      setLiveAnnouncement("Form reset to current scenario preset.");
+    }
   }, [clearResults, selectedPreset, syncServerClock]);
 
   const handleRetryClockSync = useCallback(async () => {
     setGeneralError(null);
-    // If draft was never loaded (mount failed), apply preset. If user edited draft, sync clock only.
-    await syncServerClock(draft === null ? selectedPreset : undefined);
+    const targetPreset =
+      pendingPresetRef.current ?? (draft === null ? selectedPreset : undefined);
+    const ok = await syncServerClock(targetPreset);
+    if (ok) {
+      setLiveAnnouncement(
+        "Server clock synchronized. Scenario preset is ready.",
+      );
+    }
   }, [draft, selectedPreset, syncServerClock]);
 
   const handleDraftChange = useCallback(
@@ -199,6 +268,7 @@ export const PromiseGuardWorkspace = () => {
       // Invalidate any in-flight clock requests so late arrivals don't overwrite user edits
       clockRequestIdRef.current++;
       clockAbortRef.current?.abort();
+      pendingPresetRef.current = null;
 
       // Invalidate any in-flight analysis
       analysisRequestIdRef.current++;
@@ -225,8 +295,12 @@ export const PromiseGuardWorkspace = () => {
     setFieldErrors([]);
     setGeneralError(null);
 
-    // Fail safely if server clock is not synchronized
-    if (clockSyncState.status !== "synced" || !serverTimestamp) {
+    // Fail safely if server clock is not synchronized or a preset switch failed clock sync
+    if (
+      clockSyncState.status !== "synced" ||
+      !serverTimestamp ||
+      pendingPresetRef.current !== null
+    ) {
       setGeneralError(
         "Cannot evaluate scenario: authoritative server clock synchronization is required. Please synchronize with the server clock.",
       );
@@ -241,13 +315,7 @@ export const PromiseGuardWorkspace = () => {
     const validation = validateDraft(draft);
     if (!validation.ok) {
       setFieldErrors(validation.errors);
-      setTimeout(() => {
-        errorSummaryRef.current?.focus();
-        safeScrollIntoView(errorSummaryRef.current, {
-          behavior: "smooth",
-          block: "start",
-        });
-      }, 50);
+      scheduleFocusAndScroll(() => errorSummaryRef.current, "start");
       return;
     }
 
@@ -257,6 +325,9 @@ export const PromiseGuardWorkspace = () => {
 
     setIsAnalyzing(true);
     setActiveRequest(validation.request);
+    setLiveAnnouncement(
+      "Evaluating commitment and operational evidence. Please wait.",
+    );
 
     const outcome = await requestPromiseGuardAnalysis(
       validation.request,
@@ -271,12 +342,12 @@ export const PromiseGuardWorkspace = () => {
 
     if (outcome.kind === "success") {
       setActiveResponse(outcome.response);
-      setTimeout(() => {
-        safeScrollIntoView(document.getElementById("pg-results-view"), {
-          behavior: "smooth",
-          block: "start",
-        });
-      }, 100);
+      const assessmentLabel =
+        outcome.response.deterministic.data.assessment.replace("_", " ");
+      setLiveAnnouncement(
+        `Evaluation complete. Readiness assessment is ${assessmentLabel}.`,
+      );
+      scheduleFocusAndScroll(() => resultsHeadingRef.current, "start");
       return;
     }
 
@@ -292,9 +363,7 @@ export const PromiseGuardWorkspace = () => {
       setGeneralError(
         "Network connection error. Check your connection to the CommerceOS server.",
       );
-      setTimeout(() => {
-        errorSummaryRef.current?.focus();
-      }, 50);
+      scheduleFocusAndScroll(() => errorSummaryRef.current, "start");
       return;
     }
 
@@ -306,9 +375,7 @@ export const PromiseGuardWorkspace = () => {
       if (serverErrors.length > 0) {
         setFieldErrors(serverErrors);
       }
-      setTimeout(() => {
-        errorSummaryRef.current?.focus();
-      }, 50);
+      scheduleFocusAndScroll(() => errorSummaryRef.current, "start");
       return;
     }
 
@@ -316,17 +383,19 @@ export const PromiseGuardWorkspace = () => {
       setGeneralError(
         "The server returned a response that did not match the expected PromiseGuard contract schema.",
       );
-      setTimeout(() => {
-        errorSummaryRef.current?.focus();
-      }, 50);
+      scheduleFocusAndScroll(() => errorSummaryRef.current, "start");
       return;
     }
 
     setGeneralError("An unexpected server error occurred during evaluation.");
-    setTimeout(() => {
-      errorSummaryRef.current?.focus();
-    }, 50);
-  }, [clearResults, clockSyncState.status, draft, serverTimestamp]);
+    scheduleFocusAndScroll(() => errorSummaryRef.current, "start");
+  }, [
+    clearResults,
+    clockSyncState.status,
+    draft,
+    scheduleFocusAndScroll,
+    serverTimestamp,
+  ]);
 
   const handleCancel = useCallback(() => {
     analysisRequestIdRef.current++;
@@ -336,6 +405,7 @@ export const PromiseGuardWorkspace = () => {
     }
     setIsAnalyzing(false);
     clearResults();
+    setLiveAnnouncement("Evaluation cancelled.");
   }, [clearResults]);
 
   const handleFocusField = useCallback((key: FieldKey) => {
@@ -343,21 +413,16 @@ export const PromiseGuardWorkspace = () => {
     const el = document.getElementById(domId);
     if (el) {
       el.focus();
-      safeScrollIntoView(el, { behavior: "smooth", block: "center" });
+      safeScrollIntoView(el, "center");
     } else {
-      safeScrollIntoView(formHeadingRef.current, {
-        behavior: "smooth",
-        block: "start",
-      });
+      formHeadingRef.current?.focus();
+      safeScrollIntoView(formHeadingRef.current, "start");
     }
   }, []);
 
   const handleReviseEvidence = useCallback(() => {
-    safeScrollIntoView(formHeadingRef.current, {
-      behavior: "smooth",
-      block: "start",
-    });
     formHeadingRef.current?.focus();
+    safeScrollIntoView(formHeadingRef.current, "start");
   }, []);
 
   const errorsMap = useMemo(() => {
@@ -372,6 +437,10 @@ export const PromiseGuardWorkspace = () => {
 
   return (
     <div className="pg-workspace">
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {liveAnnouncement}
+      </div>
+
       <div className="pg-workspace-container">
         <ScenarioPicker
           selectedId={selectedPreset}
@@ -401,7 +470,7 @@ export const PromiseGuardWorkspace = () => {
           </div>
         )}
 
-        {clockSyncState.status === "syncing" && !draft && (
+        {clockSyncState.status === "syncing" && (
           <div className="pg-clock-syncing" role="status">
             <span className="sync-spinner" aria-hidden="true" />
             <p>Synchronizing with CommerceOS server clock…</p>
@@ -434,6 +503,7 @@ export const PromiseGuardWorkspace = () => {
           <ResultView
             response={activeResponse}
             request={activeRequest}
+            headingRef={resultsHeadingRef}
             onReviseEvidence={handleReviseEvidence}
             onFocusField={handleFocusField}
           />
