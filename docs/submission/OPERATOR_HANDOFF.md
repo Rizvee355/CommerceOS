@@ -13,20 +13,8 @@ Mission 015 authenticated event data recorded the cutoff as `2026-10-18T10:00:00
 5. Review the submission draft in the authenticated lablab.ai form.
 6. Click final Submit personally or explicitly authorize the final submission action.
 
-## AMD escalation text
+## AMD entitlement resolution
 
-Use the existing organizer channel; do not create duplicate requests:
+The organizer supplied the official Token Factory guide and an API credential on 2026-10-18. Authenticated `/models` and `/chat/completions` requests succeeded with `DeepSeek-V4-Flash`, and the controlled local CommerceOS PromiseGuard integration also succeeded.
 
-> Event: AMD Developer Hackathon: ACT III
->
-> Team/project: CommerceOS
->
-> Registered account: r***@gmail.com
->
-> Service: https://notebooks.amd.com/tokenfactory using AMD AI Developer Program (Global) Login
->
-> Error: “Your email is not registered for API key distribution. Please contact the event organizer.”
->
-> Request: Please verify that this approved participant/team is mapped to the event API-key distribution list and provide the approved activation path or correct the organizer-side entitlement. Event registration and AMD global registration use the same email. No billing or cloud-credit assistance is needed for this Token Factory request.
-
-No new organizer message was sent because the established support thread was not accessible and duplicate outreach was prohibited.
+Do not send another entitlement escalation. The remaining decision is public activation security, not account access. The existing Vercel deployment must remain `INFERENCE_PROVIDER=disabled` until that decision is approved.

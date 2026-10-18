@@ -22,7 +22,7 @@ The product is deliberately rule-first. Deterministic evaluators own every verdi
 
 The working prototype includes an interactive PromiseGuard synthetic preview and a development-only MarginLeak synthetic preview. Production safety remains fail-closed: MarginLeak is still a `planned` capability, its production page returns `404`, and its production analysis API returns `403`. RescueCart is intentionally disabled.
 
-Live AMD inference is not yet verified because the registered ACT III account is missing organizer-side Token Factory API-distribution entitlement. CommerceOS therefore runs with inference disabled and does not claim AMD-generated output. The architecture is ready for an event-authorized adapter once a legitimate credential, endpoint, and model are issued.
+The organizer-issued AMD Token Factory credential now has authenticated proof. CommerceOS also completed a controlled local PromiseGuard integration using `DeepSeek-V4-Flash`: the model generated a schema-validated operational explanation and ranked only deterministic, pre-authorized mitigation actions. The public Vercel demo remains inference-disabled because a public live endpoint requires separate access control and deployment approval.
 
 ## Merchant problem
 
@@ -37,7 +37,7 @@ Live AMD inference is not yet verified because the registered ACT III account is
 3. **Fail-closed evidence handling:** missing or provisional data withholds certainty and routes work to review.
 4. **Human-review policy:** deterministic reason codes and explicit review state.
 5. **Contract authority:** shared Zod contracts, generated JSON Schema, and OpenAPI artifacts prevent API/UI drift.
-6. **Truthful inference boundary:** disabled, deterministic mock, and future live-provider selections with no silent live-to-mock fallback.
+6. **Truthful inference boundary:** disabled, deterministic mock, and verified AMD Token Factory advisory modes with no silent live-to-mock fallback.
 7. **Production safety:** development-only MarginLeak UI/API remain inaccessible in production.
 
 ## Technology stack
@@ -46,19 +46,19 @@ Live AMD inference is not yet verified because the registered ACT III account is
 - Zod contracts with generated JSON Schema and OpenAPI
 - Vitest, Testing Library, Playwright
 - pnpm monorepo
-- Server-only provider boundary prepared for an event-authorized AMD Token Factory endpoint
+- Server-only AMD Token Factory adapter using the organizer-documented OpenAI-compatible endpoint
 
 ## AMD status
 
-**Pending external entitlement.** No event API credential has been issued or discovered, and no authenticated AMD inference response exists. Do not add AMD Token Factory, an AMD model, or AMD hardware to the submitted technology tags until real authenticated proof is available.
+**Authenticated and integrated for a controlled synthetic workflow.** On 2026-10-18, AMD Token Factory returned successful catalog and chat-completion responses, and CommerceOS produced a live-provenance PromiseGuard advisory while preserving the deterministic `at_risk` verdict and human-review requirement. The public Vercel deployment still uses `INFERENCE_PROVIDER=disabled`; do not claim publicly deployed AMD inference or a specific AMD GPU model.
 
 ## Suggested truthful tags
 
-Ecommerce, Developer Tools, Next.js, React, TypeScript, Zod, Playwright, Human-in-the-loop
+Ecommerce, AMD Token Factory, DeepSeek-V4-Flash, Next.js, React, TypeScript, Zod, Playwright, Human-in-the-loop
 
 ## Submission URLs
 
-- GitHub: pending operator authorization to make `https://github.com/Rizvee355/CommerceOS` public.
-- Application: no public deployment authorized.
+- GitHub: `https://github.com/Rizvee355/CommerceOS-ACTIII`
+- Application: `https://commerceos-actiii.vercel.app` (AMD inference disabled)
 - Video: local artifact prepared; public upload pending operator authorization.
 - Presentation: local PPTX and PDF prepared; public upload pending operator authorization.

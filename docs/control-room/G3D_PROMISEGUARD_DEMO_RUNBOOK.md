@@ -80,7 +80,7 @@ Once started, open:
    - **Assessment Banner:** Displays **Supported** — _"Current evidence supports dispatch readiness"_ along with the explicit scope boundary: _"It is not a guarantee of dispatch or delivery."_
    - **Deterministic Findings:** Lists **5 Supporting Findings** (`INVENTORY_SECURED`, `FULFILLMENT_READY`, `NO_KNOWN_BLOCKERS`, `ESTIMATE_WITHIN_DEADLINE`, `DEADLINE_OPEN`) with evidence trace IDs.
    - **Human Review Panel:** Shows **No Review Required** (`Automated Review Status: Clear`, policy `promiseguard-policy.v1`).
-   - **AI Assistance Panel:** Truthfully displays **Inference Offline** (`AI assistance is not enabled in this environment`) or `Synthetic Mock` when mock inference is enabled.
+   - **AI Assistance Panel:** Truthfully displays **Inference Offline**, `Synthetic Mock`, or **AMD Token Factory Advisory** in an authorized loopback demonstration.
 
 ---
 
@@ -143,9 +143,10 @@ To demonstrate that PromiseGuard is a live, contract-validated evaluator rather 
 
 ## 9. How to Explain AMD Inference Readiness / Fallback Truthfully
 
-- **Adapter Architecture Ready:** `@commerceos/inference` implements a strict provider adapter boundary supporting `disabled`, `deterministic-mock`, and `amd-token-factory` (OpenAI-compatible chat completions with JSON schema validation).
+- **Authenticated Adapter:** `@commerceos/inference` implements `disabled`, `deterministic-mock`, and the authenticated `amd-token-factory` adapter using organizer-documented OpenAI-compatible chat completions with strict output validation.
 - **Truthful Runtime Provenance:** The response contract reports `inference.status` (`available` or `unavailable`), `providerId`, `modelId`, and `provenance` (`live` vs `synthetic_mock`).
-- **Strict Hardware Honesty Policy:** While live AMD Token Factory credential verification (`G0`) is pending in this environment, the UI enforces neutral provider labeling (`Live Inference Provider`, `Synthetic Mock`, or `Inference Offline`) and never claims live AMD Instinct hardware execution without authenticated proof.
+- **Strict Hardware Honesty Policy:** G0 authenticated Token Factory service proof passed on 2026-10-18. The UI labels only the exact verified adapter ID as **AMD Token Factory Advisory** and does not claim a specific AMD GPU model. Arbitrary `amd-*` provider IDs retain neutral branding.
+- **Public Safety:** The live adapter is restricted to controlled synthetic development use. Production startup rejects it, and the public Vercel deployment remains inference-disabled pending approved access control.
 
 ---
 
