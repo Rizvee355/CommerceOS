@@ -28,7 +28,9 @@ RescueCart is intentionally disabled to keep the product scope credible and the 
 
 ## AMD integration status
 
-CommerceOS contains a server-only inference-provider boundary, but **live AMD inference is not activated or verified**. The event Token Factory account currently lacks organizer-side API-distribution entitlement. The application therefore runs with inference disabled and never presents deterministic or mock output as AMD-generated content.
+Authenticated AMD Token Factory inference is verified for a controlled, synthetic PromiseGuard workflow. The server-only adapter uses the organizer-documented OpenAI-compatible endpoint and `DeepSeek-V4-Flash`, validates structured output, and can add a labeled advisory explanation without changing the deterministic verdict or human-review policy.
+
+The public Vercel application still runs with inference disabled. Production selection of `amd-token-factory` fails closed until a separate access-control and deployment approval; the local integration is not authentication for a public model endpoint.
 
 No API credential is required to run the deterministic product locally.
 
@@ -42,7 +44,7 @@ packages/contracts
   Canonical Zod contracts plus generated JSON Schema and OpenAPI artifacts
 
 packages/inference
-  Server-only provider interface, disabled provider, and deterministic test mock
+  Server-only provider interface, AMD Token Factory adapter, and deterministic test mock
 
 docs
   Architecture decisions, control-room gates, security records, and demo runbooks
@@ -65,6 +67,17 @@ $env:INFERENCE_PROVIDER = "disabled"
 pnpm check
 pnpm dev
 ```
+
+For an authorized loopback-only AMD synthetic demonstration, load the key without echoing it, then start the development server on `127.0.0.1`:
+
+```powershell
+. .\scripts\Read-TokenFactoryKey.ps1
+$env:AMD_TOKEN_FACTORY_MODEL = "DeepSeek-V4-Flash"
+$env:INFERENCE_PROVIDER = "amd-token-factory"
+pnpm --filter @commerceos/app dev --hostname 127.0.0.1 --port 3000
+```
+
+Use synthetic scenarios only. Do not send customer, payment, health, or other sensitive data to the trial service.
 
 Open:
 
@@ -106,12 +119,12 @@ The production E2E suite verifies that MarginLeak fails closed while PromiseGuar
 - CI makes no live provider calls.
 - Monetary values use integer minor units; missing evidence is never coerced to zero.
 - Production MarginLeak restrictions must not be weakened for a demo.
-- Public deployment, repository visibility, and live AMD activation require explicit operator approval.
+- Public live AMD activation requires explicit operator approval and an approved access-control design.
 
 See [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and [docs/control-room/GOVERNANCE.md](docs/control-room/GOVERNANCE.md).
 
 ## Current release caveats
 
-- Live AMD inference is unverified because Token Factory entitlement is pending.
-- No public deployment URL has been authorized.
-- The repository does not yet declare a root open-source license; choose and approve one before making the repository public.
+- Authenticated AMD inference and local CommerceOS integration are verified; public AMD access remains disabled.
+- The public release is available at `https://github.com/Rizvee355/CommerceOS-ACTIII` under the MIT license.
+- The public application is available at `https://commerceos-actiii.vercel.app` with `INFERENCE_PROVIDER=disabled`.
