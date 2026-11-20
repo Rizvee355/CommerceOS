@@ -25,6 +25,10 @@ test.describe("Social-Commerce Order Workspace E2E", () => {
     await expect(
       page.getByText("Premium Fleece Hoodie (Black)").first(),
     ).toBeVisible();
+    await expect(page.locator("#sc-quantity")).toHaveValue("2");
+    await expect(
+      page.getByText(/Bangladesh time \(UTC\+6\)/i).first(),
+    ).toBeVisible();
 
     await page
       .getByRole("button", { name: /Check Fulfilment & Profit/i })
@@ -62,9 +66,33 @@ test.describe("Social-Commerce Order Workspace E2E", () => {
         name: "সোশ্যাল-কমার্স অর্ডার ওয়ার্কস্পেস",
       }),
     ).toBeVisible();
-
-    // 4. Healthy full-price order scenario -> Ready for Manual Confirmation
     await page.getByRole("button", { name: "English" }).click();
+
+    // 4. Bangla fulfilment risk scenario -> qty 1, XL stock shortage at risk
+    await page
+      .getByRole("radio", { name: /Urgent Bangla order on out-of-stock/i })
+      .click();
+    await page
+      .getByRole("button", { name: /Extract Structured Order/i })
+      .click();
+    await expect(page.locator("#sc-quantity")).toHaveValue("1");
+    await page
+      .getByRole("button", { name: /Check Fulfilment & Profit/i })
+      .click();
+    await expect(page.getByTestId("sc-promiseguard-card")).toContainText(
+      /Fulfilment at Risk/i,
+    );
+
+    // 5. Ambiguous / missing info scenario -> qty stays blank ("")
+    await page
+      .getByRole("radio", { name: /Ambiguous chat with missing price/i })
+      .click();
+    await page
+      .getByRole("button", { name: /Extract Structured Order/i })
+      .click();
+    await expect(page.locator("#sc-quantity")).toHaveValue("");
+
+    // 6. Healthy full-price order scenario -> qty 1, Ready for Manual Confirmation, ৳1,015.30 profit
     await page
       .getByRole("radio", {
         name: /Full-price Dhaka order with secured stock/i,
@@ -73,6 +101,7 @@ test.describe("Social-Commerce Order Workspace E2E", () => {
     await page
       .getByRole("button", { name: /Extract Structured Order/i })
       .click();
+    await expect(page.locator("#sc-quantity")).toHaveValue("1");
     await page
       .getByRole("button", { name: /Check Fulfilment & Profit/i })
       .click();
@@ -82,8 +111,11 @@ test.describe("Social-Commerce Order Workspace E2E", () => {
     await expect(page.getByTestId("sc-marginleak-card")).toContainText(
       /Margin Protected/i,
     );
+    await expect(page.getByTestId("sc-marginleak-card")).toContainText(
+      /৳1,015\.30/,
+    );
 
-    // 5. Custom Vitamin C Serum Banglish shorthand discount ('155 tk discnt thkbe')
+    // 7. Custom Vitamin C Serum Banglish shorthand discount ('155 tk discnt thkbe')
     await page
       .getByLabel(/Customer & merchant conversation/i)
       .fill(
@@ -92,6 +124,7 @@ test.describe("Social-Commerce Order Workspace E2E", () => {
     await page
       .getByRole("button", { name: /Extract Structured Order/i })
       .click();
+    await expect(page.locator("#sc-quantity")).toHaveValue("5");
     await expect(page.getByTestId("sc-uncertainties")).toContainText(
       /Agreed selling price was not confirmed/i,
     );

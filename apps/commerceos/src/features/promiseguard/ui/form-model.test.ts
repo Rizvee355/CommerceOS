@@ -205,4 +205,47 @@ describe("PromiseGuard form model", () => {
       ),
     ).toBe("estimate.include");
   });
+
+  it("displays preset timestamps in Bangladesh time (UTC+6) and converts back to exact UTC without drift", () => {
+    const baseUtc = new Date("2026-11-20T04:00:00.000Z"); // 10:00 AM BD
+    const presetReq = createPromiseGuardPreset("supported", baseUtc);
+    const draft = presetToDraft(presetReq, "supported");
+
+    // Round-trip: UTC -> Bangladesh input -> UTC must match exact original commitment & ready estimate
+    const validated = validateDraft(draft);
+    expect(validated.ok).toBe(true);
+    if (!validated.ok) return;
+    expect(validated.request.commitment.dispatchBy).toBe(
+      presetReq.commitment.dispatchBy,
+    );
+    expect(
+      validated.request.operationalEvidence.readyTimeEstimate?.estimatedReadyAt,
+    ).toBe(presetReq.operationalEvidence.readyTimeEstimate?.estimatedReadyAt);
+
+    // Edit dispatchBy (10:00 AM BD -> 04:00 UTC) and estimatedReadyAt (02:30 AM BD Nov 21 -> 20:30 UTC Nov 20) independently
+    const editedDraft = {
+      ...draft,
+      commitment: { ...draft.commitment, dispatchBy: "2026-11-20T10:00" },
+      estimate: {
+        ...draft.estimate,
+        include: true,
+        estimatedReadyAt: "2026-11-21T02:30",
+      },
+    };
+    const editedResult = validateDraft(editedDraft);
+    expect(editedResult.ok).toBe(true);
+    if (!editedResult.ok) return;
+    expect(editedResult.request.commitment.dispatchBy).toBe(
+      "2026-11-20T04:00:00.000Z",
+    );
+    expect(
+      editedResult.request.operationalEvidence.readyTimeEstimate
+        ?.estimatedReadyAt,
+    ).toBe("2026-11-20T20:30:00.000Z");
+
+    // Re-loading the validated request into draft preserves exact edited Bangladesh local strings
+    const reloaded = presetToDraft(editedResult.request, "supported");
+    expect(reloaded.commitment.dispatchBy).toBe("2026-11-20T10:00");
+    expect(reloaded.estimate.estimatedReadyAt).toBe("2026-11-21T02:30");
+  });
 });

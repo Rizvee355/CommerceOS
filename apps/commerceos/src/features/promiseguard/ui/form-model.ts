@@ -6,6 +6,10 @@ import {
   type PromiseGuardFinding,
 } from "@commerceos/contracts";
 
+import {
+  dhakaInputToUtcIso,
+  utcIsoToDhakaInput,
+} from "../../../lib/dhaka-time";
 import type { PromiseGuardPresetId } from "../domain/presets";
 
 /**
@@ -43,7 +47,7 @@ export type FieldKey =
   | `${EvidenceGroup}.${TimeField}`;
 
 export type EvidenceTimes = {
-  /** `YYYY-MM-DDTHH:mm`, interpreted as UTC. Empty when not entered. */
+  /** `YYYY-MM-DDTHH:mm`, interpreted as Bangladesh time (Asia/Dhaka, UTC+6). Empty when not entered. */
   observedAt: string;
   validUntil: string;
   validityUnknown: boolean;
@@ -80,24 +84,16 @@ export type ValidationResult =
   | { ok: true; request: PromiseGuardEvaluationRequest }
   | { ok: false; errors: FieldError[] };
 
-const MINUTE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
-const SECOND = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
-
-/** RFC 3339 UTC -> value for a datetime-local control (read as UTC). */
+/** RFC 3339 UTC -> value for a datetime-local control in Bangladesh time (UTC+6). */
 export const toInput = (iso: string | null | undefined): string =>
-  iso ? iso.slice(0, 16) : "";
+  utcIsoToDhakaInput(iso);
 
-/** datetime-local value (read as UTC) -> RFC 3339 UTC. Invalid input is left as-is so the schema rejects it. */
+/** datetime-local value (Bangladesh time, UTC+6) -> RFC 3339 UTC. Invalid input is left as-is so the schema rejects it. */
 export const fromInput = (value: string): string =>
-  MINUTE.test(value)
-    ? `${value}:00.000Z`
-    : SECOND.test(value)
-      ? `${value}.000Z`
-      : value;
+  dhakaInputToUtcIso(value) ?? value;
 
 const isValidInput = (value: string): boolean =>
-  (MINUTE.test(value) || SECOND.test(value)) &&
-  !Number.isNaN(Date.parse(fromInput(value)));
+  dhakaInputToUtcIso(value) !== null;
 
 export const groupLabels: Record<EvidenceGroup, string> = {
   inventory: "Inventory allocation",
@@ -336,12 +332,12 @@ const timeErrors = (
   if (!times.observedAt) {
     errors.push({
       key: `${group}.observedAt`,
-      message: `Enter when the ${noun} was observed (UTC).`,
+      message: `Enter when the ${noun} was observed (Bangladesh time, UTC+6).`,
     });
   } else if (!isValidInput(times.observedAt)) {
     errors.push({
       key: `${group}.observedAt`,
-      message: "Enter a valid UTC date and time.",
+      message: "Enter a valid date and time (Bangladesh time, UTC+6).",
     });
   }
 
@@ -349,12 +345,12 @@ const timeErrors = (
   if (!times.validUntil) {
     errors.push({
       key: `${group}.validUntil`,
-      message: `Enter when this ${noun} stops being valid (UTC), or mark its validity as unknown.`,
+      message: `Enter when this ${noun} stops being valid (Bangladesh time, UTC+6), or mark its validity as unknown.`,
     });
   } else if (!isValidInput(times.validUntil)) {
     errors.push({
       key: `${group}.validUntil`,
-      message: "Enter a valid UTC date and time.",
+      message: "Enter a valid date and time (Bangladesh time, UTC+6).",
     });
   } else if (
     isValidInput(times.observedAt) &&
@@ -393,12 +389,12 @@ export const validateDraft = (draft: PromiseGuardDraft): ValidationResult => {
   if (!draft.commitment.dispatchBy) {
     errors.push({
       key: "dispatchBy",
-      message: "Enter the dispatch-by time (UTC).",
+      message: "Enter the dispatch-by time (Bangladesh time, UTC+6).",
     });
   } else if (!isValidInput(draft.commitment.dispatchBy)) {
     errors.push({
       key: "dispatchBy",
-      message: "Enter a valid UTC date and time.",
+      message: "Enter a valid date and time (Bangladesh time, UTC+6).",
     });
   }
 
@@ -417,12 +413,12 @@ export const validateDraft = (draft: PromiseGuardDraft): ValidationResult => {
     if (!draft.estimate.estimatedReadyAt) {
       errors.push({
         key: "estimate.estimatedReadyAt",
-        message: "Enter the estimated ready time (UTC).",
+        message: "Enter the estimated ready time (Bangladesh time, UTC+6).",
       });
     } else if (!isValidInput(draft.estimate.estimatedReadyAt)) {
       errors.push({
         key: "estimate.estimatedReadyAt",
-        message: "Enter a valid UTC date and time.",
+        message: "Enter a valid date and time (Bangladesh time, UTC+6).",
       });
     }
     timeErrors(errors, "estimate", "readiness estimate", draft.estimate);

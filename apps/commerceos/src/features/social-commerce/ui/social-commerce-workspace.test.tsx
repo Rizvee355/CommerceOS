@@ -64,6 +64,12 @@ describe("SocialCommerceWorkspace end-to-end UI flow", () => {
       ).toBeGreaterThan(0);
     });
     expect(screen.getAllByText(/Uttara, Dhaka/i).length).toBeGreaterThan(0);
+    // P0 regression: extracted quantity 2 MUST populate the editable Order Summary quantity input
+    expect(screen.getByLabelText(/^Quantity$/i)).toHaveValue("2");
+    // P1 regression: dispatch deadline uses Bangladesh time (UTC+6)
+    expect(
+      screen.getAllByText(/Bangladesh time \(UTC\+6\)/i).length,
+    ).toBeGreaterThan(0);
 
     // Step 2 -> Run deterministic dual evaluation
     fireEvent.click(
@@ -187,5 +193,62 @@ describe("SocialCommerceWorkspace end-to-end UI flow", () => {
     expect(screen.getByTestId("sc-marginleak-ledger")).toHaveTextContent(
       /-৳155\.00/,
     );
+  });
+
+  it("maps editable quantity accurately across Scenarios 1, 2, 3, and 4 and clears stale values on scenario switch or reset", async () => {
+    stubLocalApiFetch();
+    render(<SocialCommerceWorkspace />);
+
+    // Scenario 1 -> quantity 2
+    fireEvent.click(
+      screen.getByRole("button", { name: /Extract Structured Order/i }),
+    );
+    await waitFor(() => {
+      expect(screen.getByLabelText(/^Quantity$/i)).toHaveValue("2");
+    });
+
+    // Merchant edits quantity to 7
+    fireEvent.change(screen.getByLabelText(/^Quantity$/i), {
+      target: { value: "7" },
+    });
+    expect(screen.getByLabelText(/^Quantity$/i)).toHaveValue("7");
+
+    // Switching to Scenario 2 clears stale edited state and extracts quantity 1
+    fireEvent.click(
+      screen.getByRole("radio", {
+        name: /Urgent Bangla order on out-of-stock/i,
+      }),
+    );
+    expect(screen.queryByLabelText(/^Quantity$/i)).not.toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: /Extract Structured Order/i }),
+    );
+    await waitFor(() => {
+      expect(screen.getByLabelText(/^Quantity$/i)).toHaveValue("1");
+    });
+
+    // Switching to Scenario 3 keeps quantity blank (never 0 or 1)
+    fireEvent.click(
+      screen.getByRole("radio", { name: /Ambiguous chat with missing price/i }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /Extract Structured Order/i }),
+    );
+    await waitFor(() => {
+      expect(screen.getByLabelText(/^Quantity$/i)).toHaveValue("");
+    });
+
+    // Switching to Scenario 4 extracts quantity 1
+    fireEvent.click(
+      screen.getByRole("radio", {
+        name: /Full-price Dhaka order with secured stock/i,
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /Extract Structured Order/i }),
+    );
+    await waitFor(() => {
+      expect(screen.getByLabelText(/^Quantity$/i)).toHaveValue("1");
+    });
   });
 });

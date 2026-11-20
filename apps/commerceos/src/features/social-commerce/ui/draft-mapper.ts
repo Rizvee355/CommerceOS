@@ -5,6 +5,10 @@ import {
 } from "@commerceos/contracts";
 
 import {
+  dhakaInputToUtcIso,
+  offsetDateToDhakaInput,
+} from "../../../lib/dhaka-time";
+import {
   DEMO_COURIER_POLICY,
   referenceShippingMinorForZone,
 } from "../domain/demo-catalog";
@@ -26,6 +30,7 @@ export type SocialCommerceReviewForm = {
   quantity: string;
   deliveryLocation: string;
   currency: "BDT";
+  /** `YYYY-MM-DDTHH:mm` in Bangladesh time (Asia/Dhaka, UTC+6). Empty when missing. */
   dispatchByLocal: string;
   inventoryStatus: "secured" | "not_secured" | "unknown";
   inventoryValidityKnown: boolean;
@@ -34,24 +39,10 @@ export type SocialCommerceReviewForm = {
   blockingStatus: "none_known" | "active" | "unknown";
   blockerCodes: PromiseGuardEvaluationRequest["operationalEvidence"]["blockingState"]["codes"];
   includeReadyEstimate: boolean;
+  /** `YYYY-MM-DDTHH:mm` in Bangladesh time (Asia/Dhaka, UTC+6). Empty when missing. */
   estimatedReadyAtLocal: string;
   observationState: "final" | "provisional";
   categories: Record<MarginLeakFinancialCategory, CategoryFormPair>;
-};
-
-const toDatetimeLocalUtc = (base: Date, offsetMinutes: number): string =>
-  new Date(base.getTime() + offsetMinutes * 60_000).toISOString().slice(0, 16);
-
-const fromDatetimeLocalUtc = (value: string): string | null => {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(trimmed)) {
-    return `${trimmed}:00.000Z`;
-  }
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(trimmed)) {
-    return `${trimmed}.000Z`;
-  }
-  return null;
 };
 
 const basisPointsOf = (amountMinor: number, bps: number): number =>
@@ -137,7 +128,10 @@ export const extractionToReviewForm = (
 
   const hasTimeline = draft.suggestedDispatchByOffsetMinutes !== null;
   const dispatchByLocal = hasTimeline
-    ? toDatetimeLocalUtc(serverAsOf, draft.suggestedDispatchByOffsetMinutes!)
+    ? offsetDateToDhakaInput(
+        serverAsOf,
+        draft.suggestedDispatchByOffsetMinutes!,
+      )
     : "";
 
   const stockStatus = catalogMatch?.referenceStockStatus ?? "unknown";
@@ -147,7 +141,7 @@ export const extractionToReviewForm = (
   // Ready estimate: only populated when stock is known and timeline exists
   const includeReadyEstimate = hasTimeline && !isUnknownStock;
   const estimatedReadyAtLocal = includeReadyEstimate
-    ? toDatetimeLocalUtc(
+    ? offsetDateToDhakaInput(
         serverAsOf,
         isOutOfStock
           ? draft.suggestedDispatchByOffsetMinutes! + 720 // 12h after deadline due to restock hold
@@ -231,17 +225,32 @@ export const buildEvaluatePayloadFromForm = (
   | { ok: false; error: string } => {
   const productSummary =
     form.productSummary.trim() || "Unspecified item (needs verification)";
-  const qtyNum = Number(form.quantity.trim() || "1");
-  if (!Number.isInteger(qtyNum) || qtyNum < 1 || qtyNum > 1_000) {
-    return {
-      ok: false,
-      error: "Quantity must be a whole number between 1 and 1,000.",
-    };
+
+  // Never coerce a missing quantity to 0 or 1; keep null when blank and flag as unresolved.
+  const rawQty = form.quantity.trim();
+  let qtyNum: number | null = null;
+  if (rawQty !== "") {
+    if (!/^\d{1,4}$/.test(rawQty)) {
+      return {
+        ok: false,
+        error:
+          "Quantity must be a whole number between 1 and 1,000, or leave blank if missing.",
+      };
+    }
+    const parsedQty = Number(rawQty);
+    if (!Number.isInteger(parsedQty) || parsedQty < 1 || parsedQty > 1_000) {
+      return {
+        ok: false,
+        error:
+          "Quantity must be a whole number between 1 and 1,000, or leave blank if missing.",
+      };
+    }
+    qtyNum = parsedQty;
   }
 
   const unresolved: string[] = [];
   if (!form.productSummary.trim()) unresolved.push("productName");
-  if (!form.quantity.trim()) unresolved.push("quantity");
+  if (qtyNum === null) unresolved.push("quantity");
   if (!form.deliveryLocation.trim()) unresolved.push("deliveryLocation");
   if (!form.dispatchByLocal.trim()) unresolved.push("dispatchByUtc");
 
@@ -260,10 +269,27 @@ export const buildEvaluatePayloadFromForm = (
     categories[category] = { expectedMinor, observedMinor };
   }
 
-  const dispatchByUtc = fromDatetimeLocalUtc(form.dispatchByLocal);
-  const estimatedReadyAtUtc = form.includeReadyEstimate
-    ? fromDatetimeLocalUtc(form.estimatedReadyAtLocal)
-    : null;
+  const dispatchRaw = form.dispatchByLocal.trim();
+  const dispatchByUtc = dispatchRaw ? dhakaInputToUtcIso(dispatchRaw) : null;
+  if (dispatchRaw && !dispatchByUtc) {
+    return {
+      ok: false,
+      error:
+        "Invalid promised dispatch date/time. Enter a valid Bangladesh time (UTC+6) or leave blank if missing.",
+    };
+  }
+
+  const readyRaw = form.includeReadyEstimate
+    ? form.estimatedReadyAtLocal.trim()
+    : "";
+  const estimatedReadyAtUtc = readyRaw ? dhakaInputToUtcIso(readyRaw) : null;
+  if (readyRaw && !estimatedReadyAtUtc) {
+    return {
+      ok: false,
+      error:
+        "Invalid estimated ready date/time. Enter a valid Bangladesh time (UTC+6) or uncheck readiness estimate.",
+    };
+  }
 
   return {
     ok: true,

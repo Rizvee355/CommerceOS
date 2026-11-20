@@ -163,41 +163,58 @@ export const CATEGORY_LABELS_BILINGUAL = {
   grossItemRevenue: {
     en: "Gross item revenue",
     bn: "মোট পণ্যের বিক্রয়মূল্য",
+    hintEn:
+      "Selling price before chat discounts (list price vs. quoted price).",
+    hintBn: "ছাড় বাদ দেওয়ার আগের বিক্রয়মূল্য (ক্যাটালগ বনাম চ্যাটের দাম)।",
     role: "revenue" as const,
   },
   shippingRevenue: {
     en: "Customer delivery charge",
     bn: "ক্রেতার ডেলিভারি চার্জ",
+    hintEn: "Delivery fee paid by the customer (৳0 if free delivery promised).",
+    hintBn: "ক্রেতার দেওয়া ডেলিভারি চার্জ (ফ্রি ডেলিভারি হলে ৳০)।",
     role: "revenue" as const,
   },
   discounts: {
     en: "Discounts & chat concessions",
     bn: "ছাড় ও ডিসকাউন্ট",
+    hintEn: "Price reductions or coupons agreed in the chat.",
+    hintBn: "চ্যাটে সম্মত ছাড় বা ডিসকাউন্টের পরিমাণ।",
     role: "deduction" as const,
   },
   cogs: {
     en: "Cost of goods sold (COGS)",
     bn: "পণ্যের ক্রয়মূল্য (COGS)",
+    hintEn: "Wholesale or manufacturing cost multiplied by order quantity.",
+    hintBn: "প্রতি পিসের ক্রয়মূল্য × মোট পণ্যের সংখ্যা।",
     role: "deduction" as const,
   },
   shippingCost: {
     en: "Courier shipping cost",
     bn: "কুরিয়ার খরচ",
+    hintEn: "Actual courier fee you pay (e.g., inside/outside Dhaka rate).",
+    hintBn: "কুরিয়ার কোম্পানিকে আপনার পরিশোধিত ডেলিভারি খরচ।",
     role: "deduction" as const,
   },
   fulfillmentCost: {
     en: "Packaging & handling",
     bn: "প্যাকেজিং ও হ্যান্ডলিং",
+    hintEn: "Box, polybag, label, and packing handling cost.",
+    hintBn: "বক্স, পলিব্যাগ, লেবেল ও প্যাকিং খরচ।",
     role: "deduction" as const,
   },
   paymentCost: {
     en: "COD / bKash payment fee",
     bn: "COD / বিকাশ চার্জ",
+    hintEn: "Estimated 1.0% COD or 1.5% bKash/Nagad settlement charge.",
+    hintBn: "আনুমানিক ১.০% COD অথবা ১.৫% বিকাশ/নগদ চার্জ।",
     role: "deduction" as const,
   },
   platformCost: {
     en: "Platform / ad commission",
     bn: "প্ল্যাটফর্ম কমিশন",
+    hintEn: "Direct Messenger/WhatsApp orders default to ৳0 unless edited.",
+    hintBn: "সরাসরি মেসেঞ্জার/হোয়াটসঅ্যাপ অর্ডারে সাধারণত ৳০।",
     role: "deduction" as const,
   },
 } as const;

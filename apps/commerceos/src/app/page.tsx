@@ -32,31 +32,31 @@ const WORKFLOW_STEPS = [
 const CAPABILITIES = [
   {
     id: "order-intake",
-    badge: "Active workflow",
+    badge: "Interactive Demo Workflow",
     badgeTone: "ready" as const,
     title: "Chat-to-Order Intake",
     description:
-      "Convert unstructured Bangla, Banglish, and English conversations into structured order drafts with evidence quotes and visible verification flags.",
+      "Convert unstructured Bangla, Banglish, and English sample conversations into structured order drafts with evidence quotes and visible verification flags.",
     href: "/social-commerce",
     cta: "Open Order Workspace",
   },
   {
     id: "promiseguard",
-    badge: "Active workflow",
+    badge: "Deterministic Demo · Registry: Stub",
     badgeTone: "ready" as const,
     title: "Fulfilment Readiness (PromiseGuard)",
     description:
-      "Check inventory allocation, operational blockers, and packing estimates against customer dispatch deadlines before you commit to delivery.",
+      "Deterministic dispatch-readiness checker available in this sample workspace for stock, blockers, and packing estimates. Live production store/WMS integrations remain Stub.",
     href: "/promiseguard",
     cta: "Check Fulfilment Readiness",
   },
   {
     id: "marginleak",
-    badge: "Inside Order Workspace",
+    badge: "In Order Demo · Standalone Planned",
     badgeTone: "signal" as const,
     title: "Profit Protection (MarginLeak)",
     description:
-      "Compare expected vs. observed BDT contribution margin across discounts, delivery concessions, COGS, courier fees, and COD/bKash charges—never treating missing costs as ৳0.",
+      "8-category BDT contribution margin analysis runs inside the Order Workspace demo without treating missing costs as ৳0. Standalone /marginleak routes remain Planned and gated in production.",
     href: "/social-commerce",
     cta: "Analyze Order Profit",
   },
@@ -162,11 +162,12 @@ export default function HomePage() {
 
           <div className="roadmap-footnote" data-testid="roadmap-rescuecart">
             <span className="status-pill-saas" data-tone="muted">
-              Coming later
+              Disabled · Coming later
             </span>
             <p>
-              <strong>RescueCart (Cart &amp; Follow-up Recovery)</strong> is not
-              enabled yet and has no active routes in this workspace.
+              <strong>RescueCart (Cart &amp; Follow-up Recovery)</strong> is
+              strictly disabled in the capability registry and has no active
+              implementation or routes in this workspace.
             </p>
           </div>
         </section>
@@ -177,27 +178,32 @@ export default function HomePage() {
         >
           <details className="governance-drawer">
             <summary>
-              System &amp; Governance Details (Sample Data, AI Posture &amp;
-              Module Registry)
+              System &amp; Governance Details (Demo vs. Production Registry,
+              Sample Data &amp; AI Posture)
             </summary>
             <div className="governance-body">
               <div className="governance-grid">
                 <div>
-                  <h3>Safe Demonstration Posture</h3>
+                  <h3>Demo Workspace vs. Production Availability</h3>
                   <p>
-                    This workspace uses an anonymized sample Bangladeshi SME
-                    catalog and synthetic customer chats. Live Meta/WhatsApp
-                    connectors, persistent order databases, and autonomous order
-                    confirmations are intentionally disabled.
+                    Interactive workflows above run deterministic evaluators on
+                    an anonymized Bangladeshi SME catalog and sample chats. Live
+                    Meta/WhatsApp connectors, persistent databases, and
+                    autonomous order confirmations are disabled.
                   </p>
                   <p>
                     Public live LLM inference remains disabled by default to
-                    protect API credentials; deterministic extraction and
-                    rule-based evaluations run safely on the server.
+                    protect API credentials. Standalone <code>/marginleak</code>{" "}
+                    and <code>POST /api/v1/marginleak/analyze</code> remain
+                    production-gated (HTTP 404 / 403).
                   </p>
                 </div>
                 <div>
-                  <h3>API Capability Registry</h3>
+                  <h3>Production Capability Registry</h3>
+                  <p className="governance-registry-note">
+                    Reports production rollout status (distinct from the
+                    integrated deterministic demo workflows above):
+                  </p>
                   <dl className="governance-dl">
                     {moduleRegistry.map((mod) => (
                       <div

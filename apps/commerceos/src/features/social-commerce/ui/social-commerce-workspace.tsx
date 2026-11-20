@@ -4,8 +4,15 @@ import {
   MARGIN_LEAK_FINANCIAL_CATEGORIES,
   type MarginLeakFinancialCategory,
 } from "@commerceos/contracts";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
+import {
+  DHAKA_TIMEZONE_LABEL_BN,
+  DHAKA_TIMEZONE_LABEL_EN,
+  dhakaInputToUtcIso,
+  formatDhakaDateTime,
+  formatUtcDateTime,
+} from "../../../lib/dhaka-time";
 import { SOCIAL_COMMERCE_SCENARIOS } from "../domain/scenarios";
 import {
   socialCommerceEvaluateResponseSchema,
@@ -123,12 +130,30 @@ export function SocialCommerceWorkspace() {
 
   const step2HeadingRef = useRef<HTMLHeadingElement | null>(null);
   const step3HeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const extractAbortRef = useRef<AbortController | null>(null);
+  const extractRequestIdRef = useRef(0);
+  const evaluateAbortRef = useRef<AbortController | null>(null);
+  const evaluateRequestIdRef = useRef(0);
+
+  useEffect(
+    () => () => {
+      extractAbortRef.current?.abort();
+      evaluateAbortRef.current?.abort();
+    },
+    [],
+  );
 
   const copy = UI_COPY[locale];
 
   const handleSelectScenario = useCallback((scenarioId: string) => {
     const found = SOCIAL_COMMERCE_SCENARIOS.find((s) => s.id === scenarioId);
     if (!found) return;
+    extractRequestIdRef.current += 1;
+    evaluateRequestIdRef.current += 1;
+    extractAbortRef.current?.abort();
+    evaluateAbortRef.current?.abort();
+    setIsExtracting(false);
+    setIsEvaluating(false);
     setSelectedScenarioId(found.id);
     setChannel(found.channel);
     setTranscript(found.transcript);
@@ -142,6 +167,12 @@ export function SocialCommerceWorkspace() {
   }, []);
 
   const handleTranscriptChange = useCallback((next: string) => {
+    extractRequestIdRef.current += 1;
+    evaluateRequestIdRef.current += 1;
+    extractAbortRef.current?.abort();
+    evaluateAbortRef.current?.abort();
+    setIsExtracting(false);
+    setIsEvaluating(false);
     setTranscript(next);
     setExtraction(null);
     setReviewForm(null);
@@ -168,6 +199,11 @@ export function SocialCommerceWorkspace() {
       return;
     }
 
+    extractAbortRef.current?.abort();
+    const controller = new AbortController();
+    extractAbortRef.current = controller;
+    const requestSeq = ++extractRequestIdRef.current;
+
     setIsExtracting(true);
     try {
       const response = await fetch("/api/v1/social-commerce/extract", {
@@ -180,8 +216,11 @@ export function SocialCommerceWorkspace() {
           scenario: { scenarioId: selectedScenarioId, synthetic: true },
         }),
         cache: "no-store",
+        signal: controller.signal,
       });
+      if (requestSeq !== extractRequestIdRef.current) return;
       const json: unknown = await response.json();
+      if (requestSeq !== extractRequestIdRef.current) return;
       if (!response.ok) {
         setExtractError(
           locale === "bn"
@@ -207,13 +246,20 @@ export function SocialCommerceWorkspace() {
         step2HeadingRef.current?.focus();
       }, 40);
     } catch {
+      if (
+        controller.signal.aborted ||
+        requestSeq !== extractRequestIdRef.current
+      )
+        return;
       setExtractError(
         locale === "bn"
           ? "সার্ভারের সাথে সংযোগ করা যায়নি।"
           : "Unable to reach CommerceOS extraction endpoint.",
       );
     } finally {
-      setIsExtracting(false);
+      if (requestSeq === extractRequestIdRef.current) {
+        setIsExtracting(false);
+      }
     }
   }, [channel, locale, selectedScenarioId, transcript]);
 
@@ -259,6 +305,11 @@ export function SocialCommerceWorkspace() {
       return;
     }
 
+    evaluateAbortRef.current?.abort();
+    const controller = new AbortController();
+    evaluateAbortRef.current = controller;
+    const requestSeq = ++evaluateRequestIdRef.current;
+
     setIsEvaluating(true);
     try {
       const response = await fetch("/api/v1/social-commerce/evaluate", {
@@ -266,8 +317,11 @@ export function SocialCommerceWorkspace() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(built.payload),
         cache: "no-store",
+        signal: controller.signal,
       });
+      if (requestSeq !== evaluateRequestIdRef.current) return;
       const json: unknown = await response.json();
+      if (requestSeq !== evaluateRequestIdRef.current) return;
       if (!response.ok) {
         setEvaluateError(
           locale === "bn"
@@ -288,13 +342,20 @@ export function SocialCommerceWorkspace() {
         step3HeadingRef.current?.focus();
       }, 40);
     } catch {
+      if (
+        controller.signal.aborted ||
+        requestSeq !== evaluateRequestIdRef.current
+      )
+        return;
       setEvaluateError(
         locale === "bn"
           ? "মূল্যায়ন এন্ডপয়েন্টে সংযোগ করা যায়নি।"
           : "Unable to reach CommerceOS evaluation endpoint.",
       );
     } finally {
-      setIsEvaluating(false);
+      if (requestSeq === evaluateRequestIdRef.current) {
+        setIsEvaluating(false);
+      }
     }
   }, [channel, locale, reviewForm]);
 
@@ -686,7 +747,7 @@ export function SocialCommerceWorkspace() {
           </div>
 
           {/* EDITABLE REVIEW FORM */}
-          <div className="sc-review-grid">
+          <div className="sc-review-grid" key={extraction.metadata.requestId}>
             <fieldset className="pg-group">
               <legend>{copy.orderCardTitle}</legend>
               <div className="pg-grid-2">
@@ -696,9 +757,16 @@ export function SocialCommerceWorkspace() {
                   </label>
                   <input
                     id="sc-product"
+                    name="order-product"
+                    type="text"
+                    autoComplete="off"
                     className="pg-input"
                     value={reviewForm.productSummary}
-                    placeholder="Enter product name"
+                    placeholder={
+                      locale === "bn"
+                        ? "পণ্যের নাম লিখুন"
+                        : "Enter product name"
+                    }
                     onChange={(event) =>
                       updateForm((prev) => ({
                         ...prev,
@@ -713,10 +781,13 @@ export function SocialCommerceWorkspace() {
                   </label>
                   <input
                     id="sc-quantity"
-                    className="pg-input"
+                    name="order-quantity"
+                    type="text"
+                    autoComplete="off"
+                    className="pg-input sc-tabular"
                     inputMode="numeric"
                     value={reviewForm.quantity}
-                    placeholder="Missing"
+                    placeholder={locale === "bn" ? "অনুপস্থিত" : "Missing"}
                     onChange={(event) =>
                       updateForm((prev) => ({
                         ...prev,
@@ -731,9 +802,12 @@ export function SocialCommerceWorkspace() {
                   </label>
                   <input
                     id="sc-location"
+                    name="order-location"
+                    type="text"
+                    autoComplete="off"
                     className="pg-input"
                     value={reviewForm.deliveryLocation}
-                    placeholder="Missing"
+                    placeholder={locale === "bn" ? "অনুপস্থিত" : "Missing"}
                     onChange={(event) =>
                       updateForm((prev) => ({
                         ...prev,
@@ -748,6 +822,9 @@ export function SocialCommerceWorkspace() {
                   </label>
                   <input
                     id="sc-order-ref"
+                    name="order-ref"
+                    type="text"
+                    autoComplete="off"
                     className="pg-input"
                     value={reviewForm.orderRef}
                     onChange={(event) =>
@@ -769,7 +846,11 @@ export function SocialCommerceWorkspace() {
                     {locale === "bn"
                       ? "প্রতিশ্রুত ডিসপ্যাচ সময়"
                       : "Promised dispatch by"}{" "}
-                    <span className="pg-utc-badge">UTC</span>
+                    <span className="pg-utc-badge">
+                      {locale === "bn"
+                        ? DHAKA_TIMEZONE_LABEL_BN
+                        : DHAKA_TIMEZONE_LABEL_EN}
+                    </span>
                   </label>
                   <input
                     id="sc-dispatch-by"
@@ -783,6 +864,11 @@ export function SocialCommerceWorkspace() {
                       }))
                     }
                   />
+                  <p className="pg-hint">
+                    {locale === "bn"
+                      ? "বাংলাদেশ সময়ে (UTC+6) লিখুন; সার্ভারে স্বয়ংক্রিয়ভাবে UTC-তে রূপান্তর হবে।"
+                      : "Entered in Bangladesh time (UTC+6) and converted to UTC automatically."}
+                  </p>
                 </div>
                 <div className="pg-field">
                   <label htmlFor="sc-stock" className="pg-label">
@@ -900,7 +986,11 @@ export function SocialCommerceWorkspace() {
                     {locale === "bn"
                       ? "প্রস্তুত হওয়ার সম্ভাব্য সময়"
                       : "Estimated ready at"}{" "}
-                    <span className="pg-utc-badge">UTC</span>
+                    <span className="pg-utc-badge">
+                      {locale === "bn"
+                        ? DHAKA_TIMEZONE_LABEL_BN
+                        : DHAKA_TIMEZONE_LABEL_EN}
+                    </span>
                   </label>
                   <input
                     id="sc-ready-at"
@@ -914,6 +1004,11 @@ export function SocialCommerceWorkspace() {
                       }))
                     }
                   />
+                  <p className="pg-hint">
+                    {locale === "bn"
+                      ? "বাংলাদেশ সময়ে (UTC+6) সম্ভাব্য প্যাকিং শেষ হওয়ার সময়।"
+                      : "Expected packing completion in Bangladesh time (UTC+6)."}
+                  </p>
                 </div>
               ) : null}
             </fieldset>
@@ -922,6 +1017,31 @@ export function SocialCommerceWorkspace() {
           <fieldset className="pg-group">
             <legend>{copy.mlCardTitle}</legend>
             <p className="pg-fieldset-desc">{copy.mlCardHint}</p>
+
+            <div
+              className="sc-finance-legend"
+              aria-label="Financial source legend"
+            >
+              <span className="sc-source-pill" data-tone="chat">
+                {locale === "bn" ? "চ্যাট থেকে প্রাপ্ত" : "From chat"}
+              </span>
+              <span className="sc-source-pill" data-tone="catalog">
+                {locale === "bn"
+                  ? "নমুনা ক্যাটালগ / হার"
+                  : "Sample catalog / rate"}
+              </span>
+              <span className="sc-source-pill" data-tone="estimate">
+                {locale === "bn" ? "আনুমানিক ফি" : "Estimated fee"}
+              </span>
+              <span className="sc-source-pill" data-tone="missing">
+                {locale === "bn"
+                  ? "অনুপস্থিত — ম্যানুয়াল ইনপুট প্রয়োজন"
+                  : "Missing — blocks profit total"}
+              </span>
+              <span className="sc-source-pill" data-tone="edited">
+                {locale === "bn" ? "আপনার সম্পাদনা" : "Edited by you"}
+              </span>
+            </div>
 
             <div className="pg-field sc-settlement-field">
               <label htmlFor="sc-observation-state" className="pg-label">
@@ -942,7 +1062,7 @@ export function SocialCommerceWorkspace() {
                 }
               >
                 <option value="final">
-                  Final (Confirmed pricing & known fees)
+                  Final (Confirmed pricing &amp; known fees)
                 </option>
                 <option value="provisional">
                   Provisional (Pre-settlement courier/COD estimate)
@@ -955,38 +1075,48 @@ export function SocialCommerceWorkspace() {
                 const pair = reviewForm.categories[category];
                 const meta = CATEGORY_LABELS_BILINGUAL[category];
                 const label = meta[locale];
+                const hint = locale === "bn" ? meta.hintBn : meta.hintEn;
                 const isEdited = Boolean(editedCategories[category]);
-                const isMissing = !pair.expectedMajor || !pair.observedMajor;
-                const isChatDriven =
-                  category === "grossItemRevenue" ||
-                  category === "shippingRevenue" ||
-                  category === "discounts";
+                const expectedMissing = !pair.expectedMajor.trim();
+                const observedMissing = !pair.observedMajor.trim();
+                const isMissing = expectedMissing || observedMissing;
+
                 const sourceTag = isEdited
                   ? {
-                      text: locale === "bn" ? "সম্পাদিত" : "Edited",
+                      text: locale === "bn" ? "সম্পাদিত" : "Edited by you",
                       tone: "edited" as const,
                     }
                   : isMissing
                     ? {
                         text:
                           locale === "bn"
-                            ? "অনুপস্থিত — যাচাই করুন"
-                            : "Missing — verify",
+                            ? "অনুপস্থিত — ম্যানুয়াল ইনপুট প্রয়োজন"
+                            : "Missing — blocks profit total",
                         tone: "missing" as const,
                       }
-                    : isChatDriven
+                    : category === "grossItemRevenue" ||
+                        category === "shippingRevenue" ||
+                        category === "discounts"
                       ? {
                           text:
                             locale === "bn"
-                              ? "চ্যাট ও ক্যাটালগ"
-                              : "Chat & catalog",
+                              ? "চ্যাট থেকে প্রাপ্ত"
+                              : "From chat",
                           tone: "chat" as const,
                         }
-                      : {
-                          text:
-                            locale === "bn" ? "নমুনা রেফারেন্স" : "Sample ref",
-                          tone: "catalog" as const,
-                        };
+                      : category === "paymentCost"
+                        ? {
+                            text:
+                              locale === "bn" ? "আনুমানিক ফি" : "Estimated fee",
+                            tone: "estimate" as const,
+                          }
+                        : {
+                            text:
+                              locale === "bn"
+                                ? "নমুনা ক্যাটালগ / হার"
+                                : "Sample catalog / rate",
+                            tone: "catalog" as const,
+                          };
                 return (
                   <div
                     key={category}
@@ -1002,14 +1132,18 @@ export function SocialCommerceWorkspace() {
                         {sourceTag.text}
                       </span>
                     </div>
+                    <p className="sc-money-hint">{hint}</p>
                     <div className="sc-money-inputs">
                       <label className="sc-money-input-wrap">
                         <span>
-                          {locale === "bn" ? "প্রত্যাশিত (৳)" : "Expected (৳)"}
+                          {locale === "bn"
+                            ? "প্রত্যাশিত / বেসলাইন (৳)"
+                            : "Expected / Baseline (৳)"}
                         </span>
                         <input
                           type="text"
                           inputMode="decimal"
+                          autoComplete="off"
                           className="pg-input sc-tabular"
                           placeholder={
                             locale === "bn" ? "অনুপস্থিত" : "Missing"
@@ -1028,11 +1162,12 @@ export function SocialCommerceWorkspace() {
                         <span>
                           {locale === "bn"
                             ? "চ্যাট / প্রকৃত (৳)"
-                            : "Chat / Actual (৳)"}
+                            : "Observed / Chat (৳)"}
                         </span>
                         <input
                           type="text"
                           inputMode="decimal"
+                          autoComplete="off"
                           className="pg-input sc-tabular"
                           placeholder={
                             locale === "bn" ? "অনুপস্থিত" : "Missing"
@@ -1185,6 +1320,19 @@ export function SocialCommerceWorkspace() {
 
                     {pgData ? (
                       <>
+                        {reviewForm?.dispatchByLocal ? (
+                          <p className="sc-engine-tz-meta">
+                            <strong>
+                              {locale === "bn"
+                                ? "ডিসপ্যাচ সময়সীমা:"
+                                : "Dispatch deadline:"}
+                            </strong>{" "}
+                            {formatDhakaDateTime(
+                              dhakaInputToUtcIso(reviewForm.dispatchByLocal) ??
+                                evaluation.metadata.respondedAt,
+                            )}
+                          </p>
+                        ) : null}
                         <p className="sc-engine-sub">
                           {locale === "bn"
                             ? pgData.evidenceCompleteness === "complete"
@@ -1570,38 +1718,79 @@ export function SocialCommerceWorkspace() {
             </code>
           </p>
           {evaluation ? (
-            <dl className="sc-audit-dl">
-              <div>
-                <dt>Review Policy</dt>
-                <dd>
-                  <code>{evaluation.combinedReview.policyVersion}</code>
-                </dd>
-              </div>
-              {evaluation.promiseGuard ? (
+            <>
+              <dl className="sc-audit-dl">
                 <div>
-                  <dt>PromiseGuard Ruleset</dt>
+                  <dt>Review Policy</dt>
+                  <dd>
+                    <code>{evaluation.combinedReview.policyVersion}</code>
+                  </dd>
+                </div>
+                {evaluation.promiseGuard ? (
+                  <div>
+                    <dt>PromiseGuard Ruleset</dt>
+                    <dd>
+                      <code>
+                        {evaluation.promiseGuard.deterministic.rulesetVersion}
+                      </code>
+                    </dd>
+                  </div>
+                ) : null}
+                <div>
+                  <dt>MarginLeak Ruleset</dt>
                   <dd>
                     <code>
-                      {evaluation.promiseGuard.deterministic.rulesetVersion}
+                      {evaluation.marginLeak.deterministic.rulesetVersion}
                     </code>
                   </dd>
                 </div>
-              ) : null}
-              <div>
-                <dt>MarginLeak Ruleset</dt>
-                <dd>
-                  <code>
-                    {evaluation.marginLeak.deterministic.rulesetVersion}
-                  </code>
-                </dd>
-              </div>
-              <div>
-                <dt>Trace ID</dt>
-                <dd>
-                  <code>{evaluation.metadata.traceId}</code>
-                </dd>
-              </div>
-            </dl>
+                <div>
+                  <dt>Trace ID</dt>
+                  <dd>
+                    <code>{evaluation.metadata.traceId}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Evaluated (Bangladesh / UTC)</dt>
+                  <dd>
+                    {formatDhakaDateTime(evaluation.metadata.respondedAt)} ·{" "}
+                    <code>
+                      {formatUtcDateTime(evaluation.metadata.respondedAt)}
+                    </code>
+                  </dd>
+                </div>
+                {reviewForm?.dispatchByLocal ? (
+                  <div>
+                    <dt>Submitted Dispatch Deadline (UTC)</dt>
+                    <dd>
+                      <code>
+                        {dhakaInputToUtcIso(reviewForm.dispatchByLocal) ?? "—"}
+                      </code>
+                    </dd>
+                  </div>
+                ) : null}
+                {reviewForm?.includeReadyEstimate &&
+                reviewForm.estimatedReadyAtLocal ? (
+                  <div>
+                    <dt>Submitted Ready Estimate (UTC)</dt>
+                    <dd>
+                      <code>
+                        {dhakaInputToUtcIso(reviewForm.estimatedReadyAtLocal) ??
+                          "—"}
+                      </code>
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+              <details className="pg-raw-details sc-raw-json-wrap">
+                <summary className="pg-raw-summary">
+                  View raw evaluation response payload (JSON)
+                </summary>
+                <pre className="pg-raw-json">
+                  <code>{JSON.stringify(evaluation, null, 2)}</code>
+                </pre>
+              </details>
+            </>
           ) : null}
           <ul>
             <li>
