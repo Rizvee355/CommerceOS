@@ -140,6 +140,82 @@ test.describe("Social-Commerce Order Workspace E2E", () => {
     );
   });
 
+  test("editable #sc-quantity reflects extracted value across scenarios, manual edits, reset, re-extraction, and serializes missing quantity as null", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/social-commerce");
+
+    const qtyInput = page.locator("#sc-quantity");
+    const extractBtn = page.getByRole("button", {
+      name: /Extract Structured Order/i,
+    });
+
+    // 1. Immediate extraction on Scenario 1 -> editable input value is "2"
+    await extractBtn.click();
+    await expect(qtyInput).toBeVisible();
+    await expect(qtyInput).toHaveValue("2");
+    expect(await qtyInput.inputValue()).toBe("2");
+
+    // 2. Manual editing works and persists until reset/re-extract
+    await qtyInput.fill("7");
+    await expect(qtyInput).toHaveValue("7");
+
+    // 3. Clearing manually and re-extracting restores "2" without needing Reset
+    await qtyInput.fill("");
+    await expect(qtyInput).toHaveValue("");
+    await extractBtn.click();
+    await expect(qtyInput).toHaveValue("2");
+
+    // 4. Reset Sample clears Step 2, and fresh extraction restores "2"
+    await qtyInput.fill("9");
+    await page.getByRole("button", { name: /Reset Sample/i }).click();
+    await expect(qtyInput).toHaveCount(0);
+    await extractBtn.click();
+    await expect(qtyInput).toHaveValue("2");
+
+    // 5. Scenario switching: Scenario 2 -> "1", Scenario 3 -> "" (serializes quantity: null), Scenario 4 -> "1", back to Scenario 1 -> "2"
+    await page
+      .getByRole("radio", { name: /Urgent Bangla order on out-of-stock/i })
+      .click();
+    await extractBtn.click();
+    await expect(qtyInput).toHaveValue("1");
+
+    await page
+      .getByRole("radio", { name: /Ambiguous chat with missing price/i })
+      .click();
+    await extractBtn.click();
+    await expect(qtyInput).toHaveValue("");
+
+    const evalRequestPromise = page.waitForRequest(
+      (req) =>
+        req.url().endsWith("/api/v1/social-commerce/evaluate") &&
+        req.method() === "POST",
+    );
+    await page
+      .getByRole("button", { name: /Check Fulfilment & Profit/i })
+      .click();
+    const evalRequest = await evalRequestPromise;
+    const evalPayload = evalRequest.postDataJSON() as {
+      quantity: number | null;
+      unresolvedExtractionFields: string[];
+    };
+    expect(evalPayload.quantity).toBeNull();
+    expect(evalPayload.unresolvedExtractionFields).toContain("quantity");
+
+    await page
+      .getByRole("radio", {
+        name: /Full-price Dhaka order with secured stock/i,
+      })
+      .click();
+    await extractBtn.click();
+    await expect(qtyInput).toHaveValue("1");
+
+    await page.getByRole("radio", { name: /Informal chat discount/i }).click();
+    await extractBtn.click();
+    await expect(qtyInput).toHaveValue("2");
+  });
+
   test("PromiseGuard results remain overflow-free on 375px mobile even with raw JSON open", async ({
     page,
   }) => {
