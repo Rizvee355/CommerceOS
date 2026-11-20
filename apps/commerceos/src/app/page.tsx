@@ -130,6 +130,12 @@ export default function HomePage() {
                   Open synthetic workspace <span aria-hidden="true">→</span>
                 </Link>
               </p>
+              <p className="state-panel-action">
+                <Link className="text-link" href="/social-commerce">
+                  Open DIU Social-Commerce Demo{" "}
+                  <span aria-hidden="true">→</span>
+                </Link>
+              </p>
             </div>
           </article>
         </section>

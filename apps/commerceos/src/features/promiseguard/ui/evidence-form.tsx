@@ -114,6 +114,7 @@ export type EvidenceFormProps = {
   draft: PromiseGuardDraft;
   errors: FieldErrors;
   disabled: boolean;
+  isAnalyzing?: boolean;
   serverTime: string | null;
   headingRef: Ref<HTMLHeadingElement>;
   onChange: (draft: PromiseGuardDraft) => void;
@@ -125,6 +126,7 @@ export function EvidenceForm({
   draft,
   errors,
   disabled,
+  isAnalyzing = false,
   serverTime,
   headingRef,
   onChange,
@@ -379,7 +381,11 @@ export function EvidenceForm({
           disabled={disabled}
           aria-disabled={disabled}
         >
-          {disabled ? "Analyzing…" : "Run analysis"}
+          {isAnalyzing
+            ? "Analyzing…"
+            : disabled
+              ? "Syncing clock…"
+              : "Run analysis"}
         </button>
         <p className="pg-hint">
           The server evaluates this against its own clock. Results are not

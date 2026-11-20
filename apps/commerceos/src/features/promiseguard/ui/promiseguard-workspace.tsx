@@ -491,6 +491,7 @@ export const PromiseGuardWorkspace = () => {
             draft={draft}
             errors={errorsMap}
             disabled={isAnalyzing || clockSyncState.status !== "synced"}
+            isAnalyzing={isAnalyzing}
             serverTime={serverTimestamp}
             headingRef={formHeadingRef}
             onChange={handleDraftChange}
