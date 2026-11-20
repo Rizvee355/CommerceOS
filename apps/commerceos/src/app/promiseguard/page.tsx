@@ -3,9 +3,9 @@ import { SiteHeader } from "../../components/site-header";
 import { PromiseGuardWorkspace } from "../../features/promiseguard/ui/promiseguard-workspace";
 
 export const metadata: Metadata = {
-  title: "PromiseGuard Preview — CommerceOS",
+  title: "Fulfilment Readiness (PromiseGuard) — CommerceOS",
   description:
-    "Deterministic dispatch readiness evaluation and operational intelligence preview.",
+    "Deterministic dispatch readiness evaluation for order stock, blockers, and packing estimates.",
 };
 
 export default function PromiseGuardPage() {
@@ -18,18 +18,20 @@ export default function PromiseGuardPage() {
       <main id="main-content" className="pg-page">
         <section className="pg-hero" aria-labelledby="pg-hero-title">
           <div className="pg-hero-badge-row">
-            <span className="mission-tag">Mission 003 · Synthetic Preview</span>
+            <span className="mission-tag">
+              Fulfilment Readiness · Sample Workspace
+            </span>
             <span className="pg-capability-tag">
-              Module: PromiseGuard (G3C Preview)
+              PromiseGuard · Deterministic Verification
             </span>
           </div>
           <h1 id="pg-hero-title" className="pg-hero-title">
             Dispatch Readiness Intelligence
           </h1>
           <p className="pg-hero-summary">
-            Evaluate fulfillment evidence against deterministic governance
-            rules. Identify operational risks, verify evidence freshness, and
-            review accelerated mitigations before dispatch deadlines pass.
+            Verify whether current inventory allocation, operational blockers,
+            and packing estimates support a customer dispatch commitment before
+            the deadline passes.
           </p>
         </section>
 

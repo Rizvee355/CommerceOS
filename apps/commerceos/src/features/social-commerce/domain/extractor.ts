@@ -237,6 +237,12 @@ const extractQuantity = (
   return { value: null, confidence: "missing", evidence: [] };
 };
 
+const DISCOUNT_KEYWORD_PATTERN =
+  "(?:\\b(?:discount|discont|discnt|disc|dis|off|less|kom|char|chhar|chhaar|rebate)\\b|ডিসকাউন্ট|ছাড়|ছাড়|কম)";
+const DISCOUNT_PREFIX_KEYWORD_PATTERN =
+  "(?:\\b(?:discount|discont|discnt|disc|dis|off|less|char|chhar|chhaar|rebate)\\b|ডিসকাউন্ট|ছাড়|ছাড়)";
+const CURRENCY_TOKEN_PATTERN = "(?:(?:tk|taka|bdt)\\b|৳|টাকা)";
+
 const extractPricesAndDiscount = (
   lines: ParsedLine[],
   catalogMatch: DemoCatalogMatch | null,
@@ -245,10 +251,13 @@ const extractPricesAndDiscount = (
   agreedTotalPriceMinor: number | null;
   agreedPriceConfidence: "high" | "medium" | "low" | "missing";
   agreedPriceEvidence: EvidenceSpan[];
+  agreedPriceReason?: string;
+  priceUnitAmbiguous: boolean;
   discountMinor: number | null;
   discountConfidence: "high" | "medium" | "low" | "missing";
   discountEvidence: EvidenceSpan[];
   discountRequestedWithoutAmount: boolean;
+  discountAmbiguous: boolean;
 } => {
   const ordered = [
     ...lines.filter((line) => line.speaker === "merchant"),
@@ -259,10 +268,17 @@ const extractPricesAndDiscount = (
   let discountConfidence: "high" | "medium" | "low" | "missing" = "missing";
   let discountEvidence: EvidenceSpan[] = [];
   let discountRequestedWithoutAmount = false;
+  let discountAmbiguous = false;
 
   const explicitDiscountPatterns = [
-    /(\d{2,6})\s*(?:tk|taka|bdt|৳|টাকা)\s*(?:discount|off|less|ছাড়|ছাড়|কম)/i,
-    /(?:discount|off|less|ছাড়|ছাড়)\s*(?:of|:|-)?\s*(?:৳|bdt)?\s*(\d{2,6})\s*(?:tk|taka|bdt|৳|টাকা)?/i,
+    new RegExp(
+      `(?:^|[^\\d])(?:৳\\s*)?(\\d{2,6})\\s*(?:${CURRENCY_TOKEN_PATTERN})?\\s*${DISCOUNT_KEYWORD_PATTERN}`,
+      "i",
+    ),
+    new RegExp(
+      `${DISCOUNT_PREFIX_KEYWORD_PATTERN}\\s*(?:of|is|hobe|thakbe|thkbe|dibo|debo|হবে|থাকবে|দিব|:|-)?\\s*(?:৳\\s*|bdt\\s*)?(\\d{2,6})\\s*(?:${CURRENCY_TOKEN_PATTERN})?`,
+      "i",
+    ),
   ];
 
   for (const line of ordered) {
@@ -281,49 +297,70 @@ const extractPricesAndDiscount = (
     if (discountMinor !== null) break;
   }
 
+  const discountMentionRegex =
+    /\b(?:discount|discont|discnt|disc|less|kom|char|chhar|chhaar|offer)\b|ডিসকাউন্ট|ছাড়|ছাড়|কম\s*রাখ/i;
+
   if (
     discountMinor === null &&
-    lines.some((line) =>
-      /\b(?:discount|less|kom|offer)\b|ডিসকাউন্ট|ছাড়|ছাড়|কম\s*রাখ/i.test(
-        line.normalized,
-      ),
-    )
+    lines.some((line) => discountMentionRegex.test(line.normalized))
   ) {
     discountRequestedWithoutAmount = true;
     const mention = lines.find((line) =>
-      /\b(?:discount|less|kom|offer)\b|ডিসকাউন্ট|ছাড়|ছাড়|কম\s*রাখ/i.test(
-        line.normalized,
-      ),
+      discountMentionRegex.test(line.normalized),
     );
     if (mention) {
       discountEvidence = [toEvidenceSpan(mention)];
     }
   }
 
-  // Extract agreed order/item price, explicitly ignoring delivery charge and discount amounts
+  // Extract agreed order/item price, explicitly stripping delivery charges, discounts, list prices, and advance/due clauses
   let agreedTotalPriceMinor: number | null = null;
   let agreedPriceConfidence: "high" | "medium" | "low" | "missing" = "missing";
   let agreedPriceEvidence: EvidenceSpan[] = [];
+  let agreedPriceReason: string | undefined;
+  let priceUnitAmbiguous = false;
+
+  const stripDeliveryClauseForward = new RegExp(
+    `(?:delivery|shipping|courier|ডেলিভারি)\\s*(?:charge|fee|cost|চার্জ)?\\s*(?:is|of|hobe|:|-)?\\s*(?:৳\\s*|bdt\\s*)?\\d{1,5}\\s*(?:${CURRENCY_TOKEN_PATTERN})?`,
+    "gi",
+  );
+  const stripDeliveryClauseReverse = new RegExp(
+    `(?:\\+\\s*)?(?:৳\\s*)?\\d{1,5}\\s*${CURRENCY_TOKEN_PATTERN}\\s*(?:delivery|shipping|courier|ডেলিভারি)`,
+    "gi",
+  );
+  const stripDiscountClauseReverse = new RegExp(
+    `(?:৳\\s*)?\\d{1,6}\\s*(?:${CURRENCY_TOKEN_PATTERN})?\\s*${DISCOUNT_KEYWORD_PATTERN}`,
+    "gi",
+  );
+  const stripDiscountClauseForward = new RegExp(
+    `${DISCOUNT_PREFIX_KEYWORD_PATTERN}\\s*(?:of|is|hobe|thakbe|thkbe|dibo|debo|হবে|থাকবে|দিব|:|-)?\\s*(?:৳\\s*|bdt\\s*)?\\d{1,6}\\s*(?:${CURRENCY_TOKEN_PATTERN})?`,
+    "gi",
+  );
+  const stripRegularPriceClause = new RegExp(
+    `(?:regular|original|list|mrp)\\s*(?:price|dam)?\\s*(?:is|was|:|-)?\\s*(?:৳\\s*)?\\d{2,6}\\s*(?:${CURRENCY_TOKEN_PATTERN})?`,
+    "gi",
+  );
+  const stripAdvanceClauseReverse = new RegExp(
+    `(?:৳\\s*)?\\d{1,6}\\s*${CURRENCY_TOKEN_PATTERN}\\s*(?:\\b(?:advance|adv|deposit|booking|baki|due)\\b|অগ্রিম|বাকি)`,
+    "gi",
+  );
+  const stripAdvanceClauseForward = new RegExp(
+    `(?:\\b(?:advance|adv|deposit|booking|baki|due)\\b|অগ্রিম|বাকি)\\s*(?:is|of|dibo|debo|lagbe|:|-)?\\s*(?:৳\\s*)?\\d{1,6}\\s*(?:${CURRENCY_TOKEN_PATTERN})?`,
+    "gi",
+  );
+
+  const unitPriceRegex =
+    /(?:per\s*(?:pc|pcs|piece|unit|item)\b|\beach\b|\bkore\b|প্রতি\s*পিস|করে)/i;
 
   for (const line of ordered) {
-    // Strip explicit delivery charge and discount clauses before looking for item/order price
     const cleaned = line.normalized
-      .replace(
-        /(?:delivery|shipping|courier|ডেলিভারি)\s*(?:charge|fee|চার্জ)?\s*(?:of|:|-)?\s*(?:৳|bdt)?\s*\d{2,5}\s*(?:tk|taka|bdt|৳|টাকা)?/gi,
-        " ",
-      )
-      .replace(
-        /\+\s*\d{2,4}\s*(?:tk|taka|bdt|৳|টাকা)\s*(?:delivery|shipping|ডেলিভারি)/gi,
-        " ",
-      )
-      .replace(
-        /\d{2,6}\s*(?:tk|taka|bdt|৳|টাকা)\s*(?:discount|off|less|ছাড়|ছাড়|কম)/gi,
-        " ",
-      )
-      .replace(
-        /(?:regular|original|list)\s*price\s*(?:is|:|-)?\s*\d{2,6}\s*(?:tk|taka|bdt|৳|টাকা)?/gi,
-        " ",
-      );
+      .replace(stripDeliveryClauseForward, " ")
+      .replace(stripDeliveryClauseReverse, " ")
+      .replace(stripDiscountClauseReverse, " ")
+      .replace(stripDiscountClauseForward, " ")
+      .replace(stripRegularPriceClause, " ")
+      .replace(stripAdvanceClauseReverse, " ")
+      .replace(stripAdvanceClauseForward, " ");
 
     const priceMatches = [
       ...cleaned.matchAll(
@@ -332,10 +369,42 @@ const extractPricesAndDiscount = (
     ];
 
     if (priceMatches.length > 0) {
-      // Take the last price mention in the merchant/confirmed sentence (e.g. after "regular price X, 2600 tk")
+      // Take the last price mention in the merchant/confirmed sentence
       const chosen = priceMatches[priceMatches.length - 1]!;
       const major = Number(chosen[1] ?? chosen[2]);
       if (Number.isInteger(major) && major >= 100) {
+        const matchStart = chosen.index ?? 0;
+        const matchEnd = matchStart + chosen[0].length;
+        const localWindow = cleaned.slice(
+          Math.max(0, matchStart - 20),
+          Math.min(cleaned.length, matchEnd + 24),
+        );
+        const explicitUnitPrice = unitPriceRegex.test(localWindow);
+
+        if (explicitUnitPrice && quantity !== null && quantity > 1) {
+          agreedTotalPriceMinor = major * 100 * quantity;
+          agreedPriceConfidence = "medium";
+          agreedPriceReason = `Unit price (৳${major}) multiplied by quantity (${quantity}); confirm total selling price.`;
+          agreedPriceEvidence = [toEvidenceSpan(line)];
+          break;
+        }
+
+        if (
+          !explicitUnitPrice &&
+          catalogMatch &&
+          quantity !== null &&
+          quantity > 1 &&
+          major * 100 === catalogMatch.listPriceMinor
+        ) {
+          agreedTotalPriceMinor = major * 100;
+          agreedPriceConfidence = "low";
+          priceUnitAmbiguous = true;
+          agreedPriceReason =
+            "Quoted amount matches single-unit catalog price for a multi-unit order; clarify unit vs. total price.";
+          agreedPriceEvidence = [toEvidenceSpan(line)];
+          break;
+        }
+
         agreedTotalPriceMinor = major * 100;
         agreedPriceConfidence = line.speaker === "merchant" ? "high" : "medium";
         agreedPriceEvidence = [toEvidenceSpan(line)];
@@ -347,14 +416,21 @@ const extractPricesAndDiscount = (
   // If discount wasn't stated explicitly, but catalog list price * qty > agreedTotalPriceMinor, compute implied discount
   if (
     discountMinor === null &&
+    !priceUnitAmbiguous &&
     catalogMatch &&
     quantity !== null &&
     agreedTotalPriceMinor !== null
   ) {
     const grossExpectedMinor = catalogMatch.listPriceMinor * quantity;
     if (agreedTotalPriceMinor < grossExpectedMinor) {
-      discountMinor = grossExpectedMinor - agreedTotalPriceMinor;
-      discountConfidence = "medium";
+      const implied = grossExpectedMinor - agreedTotalPriceMinor;
+      discountMinor = implied;
+      if (implied > Math.round(grossExpectedMinor * 0.5)) {
+        discountConfidence = "low";
+        discountAmbiguous = true;
+      } else {
+        discountConfidence = "medium";
+      }
       discountEvidence = agreedPriceEvidence;
     } else if (
       agreedTotalPriceMinor === grossExpectedMinor &&
@@ -370,10 +446,13 @@ const extractPricesAndDiscount = (
     agreedTotalPriceMinor,
     agreedPriceConfidence,
     agreedPriceEvidence,
+    ...(agreedPriceReason ? { agreedPriceReason } : {}),
+    priceUnitAmbiguous,
     discountMinor,
     discountConfidence,
     discountEvidence,
     discountRequestedWithoutAmount,
+    discountAmbiguous,
   };
 };
 
@@ -597,7 +676,9 @@ const extractCustomerRequirementsAndPayment = (
   if (/শুক্রবার\s*অনুষ্ঠান|\bevent\b|\bgift\b/i.test(full)) {
     requirements.push("Event / time-sensitive occasion noted");
   }
-  if (/address\s+pore|ঠিকানা\s*পরে/i.test(full)) {
+  if (
+    /(?:\bfull\s+)?address\s+pore|\baddress\s+later\b|ঠিকানা\s*পরে/i.test(full)
+  ) {
     requirements.push("Full delivery address pending from customer");
   }
 
@@ -686,6 +767,15 @@ export const extractOrderFromConversation = (
       messageEn: "Agreed selling price was not confirmed in the conversation.",
       messageBn: "চ্যাটে চূড়ান্ত বিক্রয়মূল্য নিশ্চিত করা হয়নি।",
     });
+  } else if (pricing.priceUnitAmbiguous) {
+    uncertainties.push({
+      field: "agreedTotalPriceMinor",
+      code: "AMBIGUOUS_UNIT_VS_TOTAL_PRICE",
+      messageEn:
+        "Quoted price matches a single unit while multiple units were ordered; confirm unit vs. total price.",
+      messageBn:
+        "উল্লিখিত দাম এক পিসের দামের সমান অথচ একাধিক পিস অর্ডার করা হয়েছে; একক না মোট দাম তা যাচাই করুন।",
+    });
   }
   if (pricing.discountRequestedWithoutAmount) {
     uncertainties.push({
@@ -695,6 +785,15 @@ export const extractOrderFromConversation = (
         "Customer asked for a discount without an agreed BDT amount; do not assume ৳0.",
       messageBn:
         "ক্রেতা ছাড় চেয়েছে কিন্তু নির্দিষ্ট টাকার পরিমাণ ঠিক হয়নি; ৳০ ধরে নেওয়া যাবে না।",
+    });
+  } else if (pricing.discountAmbiguous) {
+    uncertainties.push({
+      field: "agreedDiscountMinor",
+      code: "AMBIGUOUS_DISCOUNT",
+      messageEn:
+        "Implied discount is unusually large relative to list price; verify the agreed selling price and discount.",
+      messageBn:
+        "তালিকাভুক্ত দামের তুলনায় আনুমানিক ছাড় অনেক বেশি; চূড়ান্ত বিক্রয়মূল্য ও ছাড় যাচাই করুন।",
     });
   } else if (pricing.discountMinor === null) {
     uncertainties.push({
@@ -706,12 +805,25 @@ export const extractOrderFromConversation = (
   }
 
   const delivery = extractDeliveryInfo(lines);
+  const fullTranscript = lines.map((line) => line.normalized).join("\n");
+  const fullAddressPending =
+    /(?:\bfull\s+)?address\s+pore|\baddress\s+later\b|ঠিকানা\s*পরে/i.test(
+      fullTranscript,
+    );
+
   if (!delivery.location) {
     uncertainties.push({
       field: "deliveryLocation",
       code: "MISSING_DELIVERY_LOCATION",
       messageEn: "Delivery area/city is missing from the conversation.",
       messageBn: "ডেলিভারি এলাকা বা শহরের নাম চ্যাটে পাওয়া যায়নি।",
+    });
+  } else if (fullAddressPending) {
+    uncertainties.push({
+      field: "deliveryLocation",
+      code: "FULL_ADDRESS_PENDING",
+      messageEn: `Delivery area (${delivery.location}) is captured, but the full street address is still pending from the customer.`,
+      messageBn: `ডেলিভারি এলাকা (${delivery.location}) পাওয়া গেছে, তবে পূর্ণ ঠিকানা এখনো ক্রেতার কাছ থেকে বাকি আছে।`,
     });
   }
   if (delivery.chargeMinor === null) {
@@ -766,9 +878,11 @@ export const extractOrderFromConversation = (
       value: pricing.agreedTotalPriceMinor,
       confidence: pricing.agreedPriceConfidence,
       needsVerification: pricing.agreedPriceConfidence !== "high",
-      ...(pricing.agreedTotalPriceMinor === null
-        ? { reason: "No agreed order price found in the conversation." }
-        : {}),
+      ...(pricing.agreedPriceReason
+        ? { reason: pricing.agreedPriceReason }
+        : pricing.agreedTotalPriceMinor === null
+          ? { reason: "No agreed order price found in the conversation." }
+          : {}),
       evidence: pricing.agreedPriceEvidence,
     },
     agreedDiscountMinor: {
@@ -776,21 +890,36 @@ export const extractOrderFromConversation = (
       confidence: pricing.discountConfidence,
       needsVerification:
         pricing.discountConfidence !== "high" ||
-        pricing.discountRequestedWithoutAmount,
+        pricing.discountRequestedWithoutAmount ||
+        pricing.discountAmbiguous,
       ...(pricing.discountRequestedWithoutAmount
         ? { reason: "Discount requested in chat without an agreed BDT amount." }
-        : pricing.discountMinor === null
-          ? { reason: "Discount not confirmed in the conversation." }
-          : {}),
+        : pricing.discountAmbiguous
+          ? {
+              reason:
+                "Implied discount is unusually large; confirm selling price and discount.",
+            }
+          : pricing.discountMinor === null
+            ? { reason: "Discount not confirmed in the conversation." }
+            : {}),
       evidence: pricing.discountEvidence,
     },
     deliveryLocation: {
       value: delivery.location,
-      confidence: delivery.location ? "high" : "missing",
-      needsVerification: !delivery.location,
+      confidence: delivery.location
+        ? fullAddressPending
+          ? "medium"
+          : "high"
+        : "missing",
+      needsVerification: !delivery.location || fullAddressPending,
       ...(!delivery.location
         ? { reason: "No Dhaka area or district mentioned in the conversation." }
-        : {}),
+        : fullAddressPending
+          ? {
+              reason:
+                "Delivery area captured, but full street address is pending from customer.",
+            }
+          : {}),
       evidence: delivery.locationEvidence,
     },
     deliveryZone: delivery.zone,

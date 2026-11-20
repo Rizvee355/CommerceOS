@@ -72,10 +72,15 @@ export const extractionToReviewForm = (
   const qty = draft.quantity.value;
 
   const expectedGross =
-    catalogMatch && qty !== null
-      ? catalogMatch.listPriceMinor * qty
-      : draft.agreedTotalPriceMinor.value;
-  const observedGross = expectedGross;
+    catalogMatch && qty !== null ? catalogMatch.listPriceMinor * qty : null;
+  const observedGross =
+    draft.agreedTotalPriceMinor.value !== null
+      ? expectedGross !== null &&
+        draft.agreedTotalPriceMinor.value === expectedGross
+        ? expectedGross
+        : draft.agreedTotalPriceMinor.value +
+          (draft.agreedDiscountMinor.value ?? 0)
+      : null;
 
   const expectedShippingRev = referenceShippingMinorForZone(draft.deliveryZone);
   const observedShippingRev = draft.deliveryChargeMinor.value;
@@ -98,23 +103,30 @@ export const extractionToReviewForm = (
       : null;
   const observedFulfillment = expectedFulfillment;
 
-  // Payment processing fee: expected 0 for cash/direct; observed reflects COD/bKash merchant fee when payment & total are known
-  const collectibleMinor =
+  // Payment processing fee: standard rate for the chosen payment method (1.0% COD, 1.5% bKash/Nagad)
+  // applied to expected vs. observed collectible amounts; stays null when payment method or totals are unknown.
+  const paymentRateBps =
+    draft.paymentMethod === "cod"
+      ? DEMO_COURIER_POLICY.codFeeBasisPoints
+      : draft.paymentMethod === "bkash" || draft.paymentMethod === "nagad"
+        ? DEMO_COURIER_POLICY.mfsFeeBasisPoints
+        : null;
+  const expectedCollectibleMinor =
+    expectedGross !== null && expectedShippingRev !== null
+      ? expectedGross + expectedShippingRev
+      : null;
+  const observedCollectibleMinor =
     draft.agreedTotalPriceMinor.value !== null &&
     draft.deliveryChargeMinor.value !== null
       ? draft.agreedTotalPriceMinor.value + draft.deliveryChargeMinor.value
       : null;
   const expectedPaymentCost =
-    collectibleMinor !== null && draft.paymentMethod !== "unknown"
-      ? draft.paymentMethod === "bkash" || draft.paymentMethod === "nagad"
-        ? basisPointsOf(collectibleMinor, DEMO_COURIER_POLICY.mfsFeeBasisPoints)
-        : 0
+    expectedCollectibleMinor !== null && paymentRateBps !== null
+      ? basisPointsOf(expectedCollectibleMinor, paymentRateBps)
       : null;
   const observedPaymentCost =
-    collectibleMinor !== null && draft.paymentMethod !== "unknown"
-      ? draft.paymentMethod === "cod"
-        ? basisPointsOf(collectibleMinor, DEMO_COURIER_POLICY.codFeeBasisPoints)
-        : basisPointsOf(collectibleMinor, DEMO_COURIER_POLICY.mfsFeeBasisPoints)
+    observedCollectibleMinor !== null && paymentRateBps !== null
+      ? basisPointsOf(observedCollectibleMinor, paymentRateBps)
       : null;
 
   const expectedPlatformCost =

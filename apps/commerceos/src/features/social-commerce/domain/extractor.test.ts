@@ -100,4 +100,71 @@ describe("Bangla / Banglish / English social-commerce order extractor", () => {
       draft.uncertainties.some((u) => u.code === "UNMATCHED_CATALOG_PRODUCT"),
     ).toBe(true);
   });
+
+  it("extracts Banglish shorthand discount ('155 tk discnt thkbe') without mistaking it for agreed price and preserves Mirpur area", () => {
+    const transcript = [
+      "Customer: 5ta Vitamin C Glow Serum lagbe Mirpur e, address pore dicchi. koto discount pabo?",
+      "Merchant: 155 tk discnt thkbe",
+    ].join("\n");
+
+    const { draft, catalogMatch } = extractOrderFromConversation(transcript);
+
+    expect(catalogMatch?.sku).toBe("SKU-CS-SRM");
+    expect(draft.productName.value).toBe("Vitamin C Glow Serum (30ml)");
+    expect(draft.quantity.value).toBe(5);
+    expect(draft.agreedDiscountMinor.value).toBe(15_500); // BDT 155.00
+    expect(draft.agreedDiscountMinor.confidence).toBe("high");
+    expect(draft.agreedTotalPriceMinor.value).toBeNull();
+    expect(draft.agreedTotalPriceMinor.confidence).toBe("missing");
+    expect(draft.agreedTotalPriceMinor.needsVerification).toBe(true);
+    expect(draft.deliveryLocation.value).toBe("Mirpur, Dhaka");
+    expect(draft.deliveryZone).toBe("inside_dhaka");
+    expect(draft.deliveryLocation.needsVerification).toBe(true);
+    expect(draft.uncertainties.map((u) => u.code)).toEqual(
+      expect.arrayContaining([
+        "MISSING_AGREED_PRICE",
+        "FULL_ADDRESS_PENDING",
+        "MISSING_DELIVERY_CHARGE",
+        "MISSING_TIMELINE",
+      ]),
+    );
+  });
+
+  it("handles Banglish discount shorthands and never treats advance deposits as total order price", () => {
+    const charResult = extractOrderFromConversation(
+      "Customer: 2ta Black Fleece Hoodie lagbe Dhanmondi te\nMerchant: 200 tk char dibo, 500 tk advance diben",
+    );
+    expect(charResult.draft.agreedDiscountMinor.value).toBe(20_000);
+    expect(charResult.draft.agreedTotalPriceMinor.value).toBeNull();
+
+    const discPrefixResult = extractOrderFromConversation(
+      "Customer: 1ta Leather Tote Bag lagbe\nMerchant: disc 120 taka, total 2280 tk",
+    );
+    expect(discPrefixResult.draft.agreedDiscountMinor.value).toBe(12_000);
+    expect(discPrefixResult.draft.agreedTotalPriceMinor.value).toBe(228_000);
+  });
+
+  it("flags single-unit price ambiguity on multi-unit orders instead of inventing a massive implied discount", () => {
+    const { draft } = extractOrderFromConversation(
+      "Customer: 5ta Vitamin C Glow Serum lagbe Uttara te\nMerchant: 950 tk",
+    );
+    expect(draft.quantity.value).toBe(5);
+    expect(draft.agreedTotalPriceMinor.confidence).toBe("low");
+    expect(draft.agreedTotalPriceMinor.needsVerification).toBe(true);
+    expect(draft.agreedDiscountMinor.value).toBeNull();
+    expect(
+      draft.uncertainties.some(
+        (u) => u.code === "AMBIGUOUS_UNIT_VS_TOTAL_PRICE",
+      ),
+    ).toBe(true);
+  });
+
+  it("multiplies explicit per-piece prices by quantity and marks for verification", () => {
+    const { draft } = extractOrderFromConversation(
+      "Customer: 5ta Vitamin C Glow Serum lagbe Uttara te\nMerchant: 950 tk per piece",
+    );
+    expect(draft.agreedTotalPriceMinor.value).toBe(475_000);
+    expect(draft.agreedTotalPriceMinor.confidence).toBe("medium");
+    expect(draft.agreedTotalPriceMinor.needsVerification).toBe(true);
+  });
 });

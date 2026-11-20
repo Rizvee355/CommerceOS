@@ -7,15 +7,30 @@ import { describe, expect, it } from "vitest";
 import HomePage from "./page";
 
 describe("CommerceOS overview", () => {
-  it("shows truthful foundation states without invented product data", () => {
+  it("presents the merchant social-commerce overview with honest governance disclosures and no disabled module links", () => {
     render(<HomePage />);
 
     expect(
       screen.getByRole("heading", {
-        name: "Commerce intelligence, one system.",
+        name: /Understand every order\. Protect every promise\. Protect every margin\./i,
       }),
     ).toBeInTheDocument();
 
+    expect(
+      screen.getAllByRole("link", { name: /Open Order Workspace/i })[0],
+    ).toHaveAttribute("href", "/social-commerce");
+    expect(
+      screen.getAllByRole("link", { name: /Check Fulfilment Readiness/i })[0],
+    ).toHaveAttribute("href", "/promiseguard");
+
+    // RescueCart remains strictly disabled with no links
+    const roadmapRescueCart = screen.getByTestId("roadmap-rescuecart");
+    expect(roadmapRescueCart).toHaveTextContent(/Coming later/i);
+    expect(
+      within(roadmapRescueCart).queryByRole("link"),
+    ).not.toBeInTheDocument();
+
+    // Governance drawer honestly reports registry states and live-AI posture
     const promiseGuard = screen.getByTestId("capability-promiseguard");
     const marginLeak = screen.getByTestId("capability-marginleak");
     const rescueCart = screen.getByTestId("capability-rescuecart");
@@ -26,34 +41,15 @@ describe("CommerceOS overview", () => {
     expect(within(rescueCart).queryByRole("link")).not.toBeInTheDocument();
 
     expect(
-      screen.getByRole("heading", {
-        name: "AMD Token Factory — Integration Verified",
-      }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("AMD API")).toBeInTheDocument();
-    expect(
-      screen.getByText("Verified", { selector: "dd" }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("PromiseGuard AI Integration")).toBeInTheDocument();
-    expect(
-      screen.getByText("Verified in controlled testing"),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Public AI Availability")).toBeInTheDocument();
-    expect(
-      screen.getByText("Disabled", { selector: "dd" }),
+      screen.getByText(
+        /Public live LLM inference remains disabled by default/i,
+      ),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/Public live inference remains disabled/i),
-    ).toBeInTheDocument();
-    expect(document.body).not.toHaveTextContent(
-      /AMD connection pending|API access not issued|AMD inference never verified|authentication blocked|awaiting Token Factory authorization/i,
-    );
-    expect(screen.getByText("Synthetic preview available")).toBeInTheDocument();
+      screen.queryByRole("link", { name: /marginleak/i }),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /Open synthetic workspace/i }),
-    ).toHaveAttribute("href", "/promiseguard");
-    expect(
-      screen.queryByText(/revenue|orders evaluated|margin saved/i),
+      screen.queryByText(/orders evaluated|margin saved/i),
     ).not.toBeInTheDocument();
   });
 });

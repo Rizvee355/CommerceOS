@@ -85,6 +85,27 @@ const buildMarginLeakRequest = (
   });
 };
 
+const FIELD_DISPLAY: Record<string, { en: string; bn: string }> = {
+  productName: { en: "Product", bn: "পণ্য" },
+  quantity: { en: "Quantity", bn: "পরিমাণ" },
+  deliveryLocation: { en: "Delivery area", bn: "ডেলিভারি এলাকা" },
+  dispatchByUtc: { en: "Dispatch deadline", bn: "ডিসপ্যাচ সময়সীমা" },
+};
+
+const CATEGORY_DISPLAY: Record<string, { en: string; bn: string }> = {
+  grossItemRevenue: { en: "Gross item revenue", bn: "পণ্যের বিক্রয়মূল্য" },
+  shippingRevenue: {
+    en: "Customer delivery charge",
+    bn: "ক্রেতার ডেলিভারি চার্জ",
+  },
+  discounts: { en: "Discounts & concessions", bn: "ছাড় ও ডিসকাউন্ট" },
+  cogs: { en: "Cost of goods sold", bn: "পণ্যের ক্রয়মূল্য" },
+  shippingCost: { en: "Courier shipping cost", bn: "কুরিয়ার খরচ" },
+  fulfillmentCost: { en: "Packaging & handling", bn: "প্যাকেজিং ও হ্যান্ডলিং" },
+  paymentCost: { en: "COD / bKash payment fee", bn: "COD / বিকাশ চার্জ" },
+  platformCost: { en: "Platform commission", bn: "প্ল্যাটফর্ম কমিশন" },
+};
+
 const buildRecommendedActions = (
   request: SocialCommerceEvaluateRequest,
   promiseGuard: PromiseGuardEvaluationResponse | null,
@@ -96,13 +117,19 @@ const buildRecommendedActions = (
   };
 
   if (request.unresolvedExtractionFields.length > 0) {
+    const missingEn = request.unresolvedExtractionFields
+      .map((field) => FIELD_DISPLAY[field]?.en ?? field)
+      .join(", ");
+    const missingBn = request.unresolvedExtractionFields
+      .map((field) => FIELD_DISPLAY[field]?.bn ?? field)
+      .join(", ");
     pushAction({
       source: "extraction",
       code: "CLARIFY_MISSING_CHAT_DETAILS",
       titleEn: "Confirm missing customer details in chat before accepting",
       titleBn: "অর্ডার কনফার্ম করার আগে ক্রেতার কাছ থেকে বাকি তথ্য জেনে নিন",
-      detailEn: `Unresolved chat fields: ${request.unresolvedExtractionFields.join(", ")}. Reply to the customer to confirm missing details instead of guessing.`,
-      detailBn: `অসম্পূর্ণ তথ্য: ${request.unresolvedExtractionFields.join(", ")}। অনুমান না করে ক্রেতাকে রিপ্লাই করে নিশ্চিত করুন।`,
+      detailEn: `Still missing: ${missingEn}. Reply to the customer to confirm these details instead of guessing.`,
+      detailBn: `বাকি তথ্য: ${missingBn}। অনুমান না করে ক্রেতাকে রিপ্লাই করে নিশ্চিত করুন।`,
       evidenceRefs: request.unresolvedExtractionFields.slice(0, 6),
     });
   }
@@ -177,6 +204,12 @@ const buildRecommendedActions = (
     const adverseCategories = mlData.categoryComparisons
       .filter((item) => item.direction === "adverse")
       .map((item) => item.category);
+    const adverseEn = adverseCategories
+      .map((cat) => CATEGORY_DISPLAY[cat]?.en ?? cat)
+      .join(", ");
+    const adverseBn = adverseCategories
+      .map((cat) => CATEGORY_DISPLAY[cat]?.bn ?? cat)
+      .join(", ");
     pushAction({
       source: "marginleak",
       code: "AUDIT_MARGIN_LEAK_DRIVERS",
@@ -184,8 +217,8 @@ const buildRecommendedActions = (
         "Review chat discount & delivery concession before approving margin hit",
       titleBn:
         "অর্ডার অনুমোদনের আগে চ্যাটে দেওয়া ছাড় ও ডেলিভারি খরচ পর্যালোচনা করুন",
-      detailEn: `MarginLeak confirmed an adverse contribution-margin variance driven by: ${adverseCategories.join(", ")}. Confirm whether this concession is intentionally approved.`,
-      detailBn: `MarginLeak ক্ষতিকর মার্জিন পার্থক্য শনাক্ত করেছে (${adverseCategories.join(", ")})। এই ছাড়/খরচ ইচ্ছাকৃতভাবে অনুমোদিত কিনা যাচাই করুন।`,
+      detailEn: `Profit impact is driven by: ${adverseEn}. Confirm whether this concession is intentionally approved.`,
+      detailBn: `লাভ কমার মূল কারণ: ${adverseBn}। এই ছাড় বা খরচ ইচ্ছাকৃতভাবে অনুমোদিত কিনা যাচাই করুন।`,
       evidenceRefs: adverseCategories.slice(0, 6),
     });
   } else if (mlData.evidenceCompleteness === "incomplete") {

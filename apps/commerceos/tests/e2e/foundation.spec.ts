@@ -1,14 +1,22 @@
 import { expect, test } from "@playwright/test";
 
-test("foundation shell and approved APIs are available", async ({
+test("customer overview shell and approved APIs are available", async ({
   page,
   request,
 }) => {
   await page.goto("/");
 
   await expect(
-    page.getByRole("heading", { name: "Commerce intelligence, one system." }),
+    page.getByRole("heading", {
+      name: /Understand every order\. Protect every promise\. Protect every margin\./i,
+    }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: /Open Order Workspace/i }).first(),
+  ).toHaveAttribute("href", "/social-commerce");
+
+  // Expand technical governance drawer and verify honest registry states
+  await page.getByText(/System & Governance Details/i).click();
   await expect(page.getByTestId("capability-promiseguard")).toContainText(
     "Stub",
   );
@@ -18,24 +26,8 @@ test("foundation shell and approved APIs are available", async ({
   await expect(page.getByTestId("capability-rescuecart")).toContainText(
     "Disabled",
   );
-  const amdStatus = page
-    .getByRole("heading", {
-      name: "AMD Token Factory — Integration Verified",
-    })
-    .locator("..");
-  await expect(amdStatus).toBeVisible();
-  await expect(amdStatus.getByText("AMD API")).toBeVisible();
-  await expect(amdStatus.getByText("Verified", { exact: true })).toBeVisible();
   await expect(
-    amdStatus.getByText("PromiseGuard AI Integration"),
-  ).toBeVisible();
-  await expect(
-    amdStatus.getByText("Verified in controlled testing"),
-  ).toBeVisible();
-  await expect(amdStatus.getByText("Public AI Availability")).toBeVisible();
-  await expect(amdStatus.getByText("Disabled", { exact: true })).toBeVisible();
-  await expect(
-    page.getByText(/Public live inference remains disabled/i),
+    page.getByText(/Public live LLM inference remains disabled by default/i),
   ).toBeVisible();
 
   const health = await request.get("/api/v1/health");

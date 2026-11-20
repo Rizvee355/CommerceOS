@@ -1,17 +1,20 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("PromiseGuard E2E workflows", () => {
-  test("navigates from Overview to PromiseGuard synthetic preview", async ({
+  test("navigates from Overview to Fulfilment Readiness (PromiseGuard)", async ({
     page,
   }) => {
     await page.goto("/");
-    await page.getByRole("link", { name: /PromiseGuard/i }).click();
+    await page
+      .getByRole("navigation", { name: "Primary" })
+      .getByRole("link", { name: /Fulfilment Readiness/i })
+      .click();
 
     await expect(page).toHaveURL("/promiseguard");
     await expect(
       page.getByRole("heading", { name: "Dispatch Readiness Intelligence" }),
     ).toBeVisible();
-    await expect(page.getByText(/Synthetic Preview/i).first()).toBeVisible();
+    await expect(page.getByText(/Sample Workspace/i).first()).toBeVisible();
   });
 
   test("evaluates Preset 1 (Supported) with truthful verdicts and offline inference", async ({

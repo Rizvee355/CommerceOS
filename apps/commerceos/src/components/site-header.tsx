@@ -1,84 +1,70 @@
 import Link from "next/link";
 
-import { moduleRegistry } from "../features/module-registry";
-
 export type NavigationSurface = "overview" | "promiseguard" | "social-commerce";
 
-const titleCase = (value: string): string =>
-  `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
-
-const stateOf = (id: "marginleak" | "rescuecart"): string =>
-  moduleRegistry.find((module) => module.id === id)?.state ?? "unknown";
-
 /**
- * Unified CommerceOS navigation.
+ * Customer-facing CommerceOS navigation shell.
  *
- * Only real, approved routes are links. MarginLeak and RescueCart render as
- * inert text carrying the state reported by the capability registry, so the
- * header can never imply that those modules are available.
+ * Exposes only real, active workflows. Standalone MarginLeak remains gated in
+ * production (margin protection is integrated directly inside Order Workspace),
+ * and RescueCart remains strictly disabled with no navigation affordance.
  */
 export function SiteHeader({ current }: { current: NavigationSurface }) {
-  const marginLeakState = stateOf("marginleak");
-  const rescueCartState = stateOf("rescuecart");
-
   return (
-    <header className="site-header">
-      <Link className="wordmark" href="/" aria-label="CommerceOS home">
-        <span className="wordmark-mark" aria-hidden="true">
-          CO
-        </span>
-        <span>CommerceOS</span>
-      </Link>
+    <header className="site-header-shell">
+      <div className="site-header">
+        <Link className="wordmark" href="/" aria-label="CommerceOS home">
+          <span className="wordmark-mark" aria-hidden="true">
+            CO
+          </span>
+          <span className="wordmark-text">
+            <strong>CommerceOS</strong>
+            <span className="wordmark-sub">Social Commerce Ops</span>
+          </span>
+        </Link>
 
-      <nav className="primary-nav" aria-label="Primary">
-        <ul>
-          <li>
-            <Link
-              className="nav-item"
-              href="/"
-              aria-current={current === "overview" ? "page" : undefined}
-            >
-              Overview
-            </Link>
-          </li>
-          <li>
-            <Link
-              className="nav-item"
-              href="/social-commerce"
-              aria-current={current === "social-commerce" ? "page" : undefined}
-            >
-              Social Commerce
-              <span className="nav-tag" data-tone="preview">
-                DIU Demo
-              </span>
-            </Link>
-          </li>
-          <li>
-            <Link
-              className="nav-item"
-              href="/promiseguard"
-              aria-current={current === "promiseguard" ? "page" : undefined}
-            >
-              PromiseGuard
-              <span className="nav-tag" data-tone="preview">
-                Synthetic preview
-              </span>
-            </Link>
-          </li>
-          <li>
-            <span className="nav-item nav-item-inert">
-              MarginLeak
-              <span className="nav-tag">{titleCase(marginLeakState)}</span>
-            </span>
-          </li>
-          <li>
-            <span className="nav-item nav-item-inert">
-              RescueCart
-              <span className="nav-tag">{titleCase(rescueCartState)}</span>
-            </span>
-          </li>
-        </ul>
-      </nav>
+        <nav className="primary-nav" aria-label="Primary">
+          <ul>
+            <li>
+              <Link
+                className="nav-item"
+                href="/"
+                aria-current={current === "overview" ? "page" : undefined}
+              >
+                Overview
+              </Link>
+            </li>
+            <li>
+              <Link
+                className="nav-item"
+                href="/social-commerce"
+                aria-current={
+                  current === "social-commerce" ? "page" : undefined
+                }
+              >
+                Order Workspace
+              </Link>
+            </li>
+            <li>
+              <Link
+                className="nav-item"
+                href="/promiseguard"
+                aria-current={current === "promiseguard" ? "page" : undefined}
+              >
+                Fulfilment Readiness
+              </Link>
+            </li>
+          </ul>
+        </nav>
+
+        <span
+          className="header-env-badge"
+          title="Interactive demonstration workspace using synthetic sample data"
+        >
+          <span className="header-env-dot" aria-hidden="true" />
+          Sample Workspace
+        </span>
+      </div>
     </header>
   );
 }

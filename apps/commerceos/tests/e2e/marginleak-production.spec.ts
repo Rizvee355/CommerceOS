@@ -2,15 +2,14 @@ import { expect, test } from "@playwright/test";
 import { createMarginLeakPreset } from "../../src/features/marginleak/ui/presets";
 
 test.describe("MarginLeak production fail-closed boundaries", () => {
-  test("Overview and header report MarginLeak as Planned and expose no navigation link to /marginleak", async ({
+  test("Overview and header expose no navigation link to /marginleak and capabilities report MarginLeak as planned", async ({
     page,
   }) => {
     await page.goto("/");
 
     const headerNav = page.getByRole("navigation", { name: "Primary" });
-    await expect(headerNav).toContainText("MarginLeak");
-    await expect(headerNav).toContainText("Planned");
     await expect(headerNav.locator('a[href="/marginleak"]')).toHaveCount(0);
+    await expect(page.locator('a[href="/marginleak"]')).toHaveCount(0);
 
     const capabilitiesRes = await page.request.get("/api/v1/capabilities");
     expect(capabilitiesRes.status()).toBe(200);
