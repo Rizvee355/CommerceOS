@@ -23,8 +23,15 @@ import {
 } from "./draft-mapper";
 import { formatMinorCurrency } from "./format";
 import {
+  ACTION_SOURCE_LABELS,
   CATEGORY_LABELS_BILINGUAL,
   CONFIDENCE_LABELS,
+  FIELD_LABELS_BILINGUAL,
+  humanizeCode,
+  ML_VERDICT_LABELS,
+  PG_FINDING_LABELS,
+  PG_VERDICT_LABELS,
+  REVIEW_REASON_LABELS,
   UI_COPY,
   type UiLocale,
 } from "./i18n";
@@ -110,6 +117,9 @@ export function SocialCommerceWorkspace() {
   const [humanDecision, setHumanDecision] = useState<
     "none" | "approved" | "follow_up"
   >("none");
+  const [editedCategories, setEditedCategories] = useState<
+    Partial<Record<MarginLeakFinancialCategory, boolean>>
+  >({});
 
   const step2HeadingRef = useRef<HTMLHeadingElement | null>(null);
   const step3HeadingRef = useRef<HTMLHeadingElement | null>(null);
@@ -128,6 +138,7 @@ export function SocialCommerceWorkspace() {
     setExtractError(null);
     setEvaluateError(null);
     setHumanDecision("none");
+    setEditedCategories({});
   }, []);
 
   const handleTranscriptChange = useCallback((next: string) => {
@@ -138,6 +149,7 @@ export function SocialCommerceWorkspace() {
     setExtractError(null);
     setEvaluateError(null);
     setHumanDecision("none");
+    setEditedCategories({});
   }, []);
 
   const handleExtract = useCallback(async () => {
@@ -187,6 +199,7 @@ export function SocialCommerceWorkspace() {
 
       const serverAsOf = new Date(parsed.data.metadata.receivedAt);
       setExtraction(parsed.data);
+      setEditedCategories({});
       setReviewForm(
         extractionToReviewForm(parsed.data, selectedScenarioId, serverAsOf),
       );
@@ -220,6 +233,7 @@ export function SocialCommerceWorkspace() {
       side: "expectedMajor" | "observedMajor",
       value: string,
     ) => {
+      setEditedCategories((prev) => ({ ...prev, [category]: true }));
       updateForm((prev) => ({
         ...prev,
         categories: {
@@ -324,6 +338,41 @@ export function SocialCommerceWorkspace() {
         <div className="sc-honesty-banner" role="note">
           <strong>{copy.demoBannerTitle}</strong> {copy.demoBannerBody}
         </div>
+
+        <ol
+          className="sc-stepper"
+          aria-label={
+            locale === "bn" ? "অর্ডার যাচাইয়ের ধাপ" : "Workflow steps"
+          }
+        >
+          <li
+            className="sc-step-item"
+            data-state={extraction ? "done" : "active"}
+          >
+            <span className="sc-step-num" aria-hidden="true">
+              {extraction ? "✓" : "1"}
+            </span>
+            <span>{copy.step1Short}</span>
+          </li>
+          <li
+            className="sc-step-item"
+            data-state={evaluation ? "done" : extraction ? "active" : "pending"}
+          >
+            <span className="sc-step-num" aria-hidden="true">
+              {evaluation ? "✓" : "2"}
+            </span>
+            <span>{copy.step2Short}</span>
+          </li>
+          <li
+            className="sc-step-item"
+            data-state={evaluation ? "active" : "pending"}
+          >
+            <span className="sc-step-num" aria-hidden="true">
+              3
+            </span>
+            <span>{copy.step3Short}</span>
+          </li>
+        </ol>
       </section>
 
       {/* STEP 1: CONVERSATION INTAKE */}
@@ -468,12 +517,19 @@ export function SocialCommerceWorkspace() {
               </h3>
               <p className="sc-uncertainty-hint">{copy.uncertaintiesHint}</p>
               <ul className="sc-uncertainty-list">
-                {extraction.draft.uncertainties.map((item) => (
-                  <li key={`${item.field}-${item.code}`}>
-                    <code>{item.code}</code> —{" "}
-                    {locale === "bn" ? item.messageBn : item.messageEn}
-                  </li>
-                ))}
+                {extraction.draft.uncertainties.map((item) => {
+                  const fieldLabel =
+                    FIELD_LABELS_BILINGUAL[item.field]?.[locale] ?? item.field;
+                  return (
+                    <li
+                      key={`${item.field}-${item.code}`}
+                      data-code={item.code}
+                    >
+                      <strong>{fieldLabel}:</strong>{" "}
+                      {locale === "bn" ? item.messageBn : item.messageEn}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ) : null}
@@ -897,10 +953,55 @@ export function SocialCommerceWorkspace() {
             <div className="sc-money-grid">
               {MARGIN_LEAK_FINANCIAL_CATEGORIES.map((category) => {
                 const pair = reviewForm.categories[category];
-                const label = CATEGORY_LABELS_BILINGUAL[category][locale];
+                const meta = CATEGORY_LABELS_BILINGUAL[category];
+                const label = meta[locale];
+                const isEdited = Boolean(editedCategories[category]);
+                const isMissing = !pair.expectedMajor || !pair.observedMajor;
+                const isChatDriven =
+                  category === "grossItemRevenue" ||
+                  category === "shippingRevenue" ||
+                  category === "discounts";
+                const sourceTag = isEdited
+                  ? {
+                      text: locale === "bn" ? "সম্পাদিত" : "Edited",
+                      tone: "edited" as const,
+                    }
+                  : isMissing
+                    ? {
+                        text:
+                          locale === "bn"
+                            ? "অনুপস্থিত — যাচাই করুন"
+                            : "Missing — verify",
+                        tone: "missing" as const,
+                      }
+                    : isChatDriven
+                      ? {
+                          text:
+                            locale === "bn"
+                              ? "চ্যাট ও ক্যাটালগ"
+                              : "Chat & catalog",
+                          tone: "chat" as const,
+                        }
+                      : {
+                          text:
+                            locale === "bn" ? "নমুনা রেফারেন্স" : "Sample ref",
+                          tone: "catalog" as const,
+                        };
                 return (
-                  <div key={category} className="sc-money-row">
-                    <span className="sc-money-label">{label}</span>
+                  <div
+                    key={category}
+                    className="sc-money-row"
+                    data-missing={isMissing ? "true" : "false"}
+                  >
+                    <div className="sc-money-row-head">
+                      <span className="sc-money-label">{label}</span>
+                      <span
+                        className="sc-source-pill"
+                        data-tone={sourceTag.tone}
+                      >
+                        {sourceTag.text}
+                      </span>
+                    </div>
                     <div className="sc-money-inputs">
                       <label className="sc-money-input-wrap">
                         <span>
@@ -909,8 +1010,10 @@ export function SocialCommerceWorkspace() {
                         <input
                           type="text"
                           inputMode="decimal"
-                          className="pg-input"
-                          placeholder="Missing"
+                          className="pg-input sc-tabular"
+                          placeholder={
+                            locale === "bn" ? "অনুপস্থিত" : "Missing"
+                          }
                           value={pair.expectedMajor}
                           onChange={(event) =>
                             updateCategoryField(
@@ -930,8 +1033,10 @@ export function SocialCommerceWorkspace() {
                         <input
                           type="text"
                           inputMode="decimal"
-                          className="pg-input"
-                          placeholder="Missing"
+                          className="pg-input sc-tabular"
+                          placeholder={
+                            locale === "bn" ? "অনুপস্থিত" : "Missing"
+                          }
                           value={pair.observedMajor}
                           onChange={(event) =>
                             updateCategoryField(
@@ -969,323 +1074,538 @@ export function SocialCommerceWorkspace() {
       ) : null}
 
       {/* STEP 3: DUAL DETERMINISTIC EVALUATION + HUMAN REVIEW GATE */}
-      {evaluation ? (
-        <section
-          className="sc-card sc-results-section"
-          aria-labelledby="sc-step3-heading"
-        >
-          <div className="sc-section-head">
-            <p className="eyebrow">{copy.step3Tag}</p>
-            <h2
-              id="sc-step3-heading"
-              ref={step3HeadingRef}
-              tabIndex={-1}
-              className="sc-section-title"
-            >
-              {copy.step3Title}
-            </h2>
-          </div>
+      {evaluation
+        ? (() => {
+            const pgData = evaluation.promiseGuard?.deterministic.data ?? null;
+            const mlData = evaluation.marginLeak.deterministic.data;
+            const netVarMinor =
+              mlData.totals.netContributionVariance?.amountMinor ?? null;
+            // In MarginLeak, netContributionVariance = expected - observed:
+            // > 0 means observed margin is LOWER than expected (adverse impact)
+            // < 0 means observed margin is HIGHER than expected (favorable impact)
+            const netImpactDisplay =
+              netVarMinor === null
+                ? locale === "bn"
+                  ? "স্থগিত (তথ্য অসম্পূর্ণ)"
+                  : "Withheld (incomplete)"
+                : netVarMinor > 0
+                  ? `-${formatMinorCurrency(netVarMinor, evaluation.currency)}`
+                  : netVarMinor < 0
+                    ? `+${formatMinorCurrency(Math.abs(netVarMinor), evaluation.currency)}`
+                    : formatMinorCurrency(0, evaluation.currency);
+            const netImpactTone =
+              netVarMinor === null
+                ? "muted"
+                : netVarMinor > 0
+                  ? "adverse"
+                  : netVarMinor < 0
+                    ? "favorable"
+                    : "neutral";
 
-          <div
-            className="sc-gate-banner"
-            data-status={evaluation.combinedReview.overallStatus}
-            data-testid="sc-human-gate"
-          >
-            <div className="sc-gate-top">
-              <span className="sc-gate-pill">
-                {evaluation.combinedReview.overallStatus === "hold_for_review"
-                  ? `▲ ${copy.holdForReview}`
-                  : `✓ ${copy.readyForConfirmation}`}
-              </span>
-              <span className="sc-meta-chip">
-                {copy.humanGateTitle} ·{" "}
-                <code>{evaluation.combinedReview.policyVersion}</code>
-              </span>
-            </div>
-            <p className="sc-gate-note">{copy.humanGateNote}</p>
-            {evaluation.combinedReview.reasonCodes.length > 0 ? (
-              <div className="sc-reason-pills">
-                {evaluation.combinedReview.reasonCodes.map((code) => (
-                  <code key={code} className="pg-code-pill">
-                    {code}
-                  </code>
-                ))}
-              </div>
-            ) : null}
-          </div>
+            const comparisonByCategory = new Map(
+              mlData.categoryComparisons.map((item) => [item.category, item]),
+            );
+            const missingPathSet = new Set(mlData.missingEvidencePaths);
 
-          <div className="sc-dual-grid">
-            {/* PROMISEGUARD RESULT CARD */}
-            <article
-              className="sc-engine-card"
-              data-testid="sc-promiseguard-card"
-            >
-              <div className="sc-engine-header">
-                <h3>{copy.pgResultTitle}</h3>
-                {evaluation.promiseGuard ? (
-                  <span
-                    className="sc-verdict-pill"
-                    data-verdict={
-                      evaluation.promiseGuard.deterministic.data.assessment
-                    }
+            return (
+              <section
+                className="sc-card sc-results-section"
+                aria-labelledby="sc-step3-heading"
+              >
+                <div className="sc-section-head">
+                  <p className="eyebrow">{copy.step3Tag}</p>
+                  <h2
+                    id="sc-step3-heading"
+                    ref={step3HeadingRef}
+                    tabIndex={-1}
+                    className="sc-section-title"
                   >
-                    {evaluation.promiseGuard.deterministic.data.assessment.replace(
-                      "_",
-                      " ",
-                    )}
-                  </span>
-                ) : (
-                  <span
-                    className="sc-verdict-pill"
-                    data-verdict="indeterminate"
-                  >
-                    Deadline missing
-                  </span>
-                )}
-              </div>
+                    {copy.step3Title}
+                  </h2>
+                </div>
 
-              {evaluation.promiseGuard ? (
-                <>
-                  <p className="sc-engine-sub">
-                    Ruleset:{" "}
-                    <code>
-                      {evaluation.promiseGuard.deterministic.rulesetVersion}
-                    </code>{" "}
-                    · Completeness:{" "}
-                    <strong>
-                      {
-                        evaluation.promiseGuard.deterministic.data
-                          .evidenceCompleteness
-                      }
-                    </strong>
-                  </p>
-                  <ul className="sc-findings-compact">
-                    {evaluation.promiseGuard.deterministic.data.findings.map(
-                      (finding, index) => (
-                        <li
-                          key={`${finding.code}-${index}`}
-                          data-impact={finding.impact}
-                        >
-                          <span className="sc-impact-dot" aria-hidden="true" />
-                          <code>{finding.code}</code>
-                        </li>
-                      ),
-                    )}
-                  </ul>
-                </>
-              ) : (
-                <p className="sc-engine-sub">
-                  {evaluation.promiseGuardSkippedReason}
-                </p>
-              )}
-            </article>
-
-            {/* MARGINLEAK RESULT CARD */}
-            <article
-              className="sc-engine-card"
-              data-testid="sc-marginleak-card"
-            >
-              <div className="sc-engine-header">
-                <h3>{copy.mlResultTitle}</h3>
-                <span
-                  className="sc-verdict-pill"
-                  data-verdict={
-                    evaluation.marginLeak.deterministic.data.assessment
-                  }
+                <div
+                  className="sc-gate-banner"
+                  data-status={evaluation.combinedReview.overallStatus}
+                  data-testid="sc-human-gate"
                 >
-                  {evaluation.marginLeak.deterministic.data.assessment.replaceAll(
-                    "_",
-                    " ",
-                  )}
-                </span>
-              </div>
+                  <div className="sc-gate-top">
+                    <span className="sc-gate-pill">
+                      {evaluation.combinedReview.overallStatus ===
+                      "hold_for_review"
+                        ? `▲ ${copy.holdForReview}`
+                        : `✓ ${copy.readyForConfirmation}`}
+                    </span>
+                    <span className="sc-meta-chip">{copy.humanGateTitle}</span>
+                  </div>
+                  <p className="sc-gate-note">{copy.humanGateNote}</p>
+                  {evaluation.combinedReview.reasonCodes.length > 0 ? (
+                    <div className="sc-reason-pills">
+                      {evaluation.combinedReview.reasonCodes.map((code) => (
+                        <span
+                          key={code}
+                          className="sc-reason-pill"
+                          data-code={code}
+                        >
+                          {humanizeCode(code, REVIEW_REASON_LABELS, locale)}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
 
-              <p className="sc-engine-sub">
-                Ruleset:{" "}
-                <code>
-                  {evaluation.marginLeak.deterministic.rulesetVersion}
-                </code>{" "}
-                · Completeness:{" "}
-                <strong>
-                  {
-                    evaluation.marginLeak.deterministic.data
-                      .evidenceCompleteness
-                  }
-                </strong>{" "}
-                · State:{" "}
-                <strong>
-                  {evaluation.marginLeak.deterministic.data.observationState}
-                </strong>
-              </p>
+                <div className="sc-dual-grid">
+                  {/* PROMISEGUARD RESULT CARD */}
+                  <article
+                    className="sc-engine-card"
+                    data-testid="sc-promiseguard-card"
+                  >
+                    <div className="sc-engine-header">
+                      <h3>{copy.pgResultTitle}</h3>
+                      {pgData ? (
+                        <span
+                          className="sc-verdict-pill"
+                          data-verdict={pgData.assessment}
+                        >
+                          {humanizeCode(
+                            pgData.assessment,
+                            PG_VERDICT_LABELS,
+                            locale,
+                          )}
+                        </span>
+                      ) : (
+                        <span
+                          className="sc-verdict-pill"
+                          data-verdict="indeterminate"
+                        >
+                          {PG_VERDICT_LABELS.missing_deadline![locale]}
+                        </span>
+                      )}
+                    </div>
 
-              <div className="sc-kpi-grid">
-                <div className="sc-kpi-box">
-                  <span>
-                    {locale === "bn" ? "প্রত্যাশিত লাভ" : "Expected Margin"}
-                  </span>
-                  <strong>
-                    {evaluation.marginLeak.deterministic.data.totals
-                      .expectedContributionMargin
-                      ? formatMinorCurrency(
-                          evaluation.marginLeak.deterministic.data.totals
-                            .expectedContributionMargin.amountMinor,
-                          evaluation.currency,
-                        )
-                      : "Withheld (incomplete)"}
-                  </strong>
-                </div>
-                <div className="sc-kpi-box">
-                  <span>
-                    {locale === "bn" ? "প্রকৃত / চ্যাট লাভ" : "Observed Margin"}
-                  </span>
-                  <strong>
-                    {evaluation.marginLeak.deterministic.data.totals
-                      .observedContributionMargin
-                      ? formatMinorCurrency(
-                          evaluation.marginLeak.deterministic.data.totals
-                            .observedContributionMargin.amountMinor,
-                          evaluation.currency,
-                        )
-                      : "Withheld (incomplete)"}
-                  </strong>
-                </div>
-                <div className="sc-kpi-box">
-                  <span>
-                    {locale === "bn" ? "মোট পার্থক্য" : "Net Variance"}
-                  </span>
-                  <strong>
-                    {evaluation.marginLeak.deterministic.data.totals
-                      .netContributionVariance
-                      ? formatMinorCurrency(
-                          evaluation.marginLeak.deterministic.data.totals
-                            .netContributionVariance.amountMinor,
-                          evaluation.currency,
-                          { signed: true },
-                        )
-                      : "Withheld (incomplete)"}
-                  </strong>
-                </div>
-                <div className="sc-kpi-box" data-highlight="leak">
-                  <span>
-                    {locale === "bn" ? "নিশ্চিত লিক" : "Confirmed Leak"}
-                  </span>
-                  <strong>
-                    {evaluation.marginLeak.deterministic.data.totals.leakAmount
-                      ? formatMinorCurrency(
-                          evaluation.marginLeak.deterministic.data.totals
-                            .leakAmount.amountMinor,
-                          evaluation.currency,
-                        )
-                      : evaluation.marginLeak.deterministic.data
-                            .observationState === "provisional"
-                        ? "Unconfirmed (provisional)"
-                        : "Not calculable"}
-                  </strong>
-                </div>
-              </div>
+                    {pgData ? (
+                      <>
+                        <p className="sc-engine-sub">
+                          {locale === "bn"
+                            ? pgData.evidenceCompleteness === "complete"
+                              ? "সব অপারেশনাল তথ্য যাচাই করা হয়েছে।"
+                              : "কিছু স্টক বা প্রস্তুতির তথ্য অসম্পূর্ণ রয়েছে।"
+                            : pgData.evidenceCompleteness === "complete"
+                              ? "All fulfilment readiness checks evaluated with complete inputs."
+                              : "Some fulfilment or freshness details are incomplete and need verification."}
+                        </p>
+                        <ul className="sc-findings-compact">
+                          {pgData.findings.map((finding, index) => (
+                            <li
+                              key={`${finding.code}-${index}`}
+                              data-impact={finding.impact}
+                            >
+                              <span
+                                className="sc-impact-dot"
+                                aria-hidden="true"
+                              />
+                              <span>
+                                {humanizeCode(
+                                  finding.code,
+                                  PG_FINDING_LABELS,
+                                  locale,
+                                )}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    ) : (
+                      <p className="sc-engine-sub">
+                        {locale === "bn"
+                          ? "চ্যাটে বা ফর্মে কোনো নির্দিষ্ট ডিসপ্যাচ সময় দেওয়া হয়নি। ক্রেতার সাথে ডিসপ্যাচ সময় নিশ্চিত না করে প্রতিশ্রুতি দেওয়া যাবে না।"
+                          : evaluation.promiseGuardSkippedReason}
+                      </p>
+                    )}
+                  </article>
 
-              {evaluation.marginLeak.deterministic.data.categoryComparisons.some(
-                (item) => item.direction !== "neutral",
-              ) ? (
-                <ul className="sc-findings-compact">
-                  {evaluation.marginLeak.deterministic.data.categoryComparisons
-                    .filter((item) => item.direction !== "neutral")
-                    .map((item) => (
-                      <li
-                        key={item.category}
-                        data-impact={
-                          item.direction === "adverse"
-                            ? "adverse"
-                            : "supporting"
+                  {/* MARGINLEAK RESULT CARD */}
+                  <article
+                    className="sc-engine-card"
+                    data-testid="sc-marginleak-card"
+                  >
+                    <div className="sc-engine-header">
+                      <h3>{copy.mlResultTitle}</h3>
+                      <span
+                        className="sc-verdict-pill"
+                        data-verdict={mlData.assessment}
+                      >
+                        {humanizeCode(
+                          mlData.assessment,
+                          ML_VERDICT_LABELS,
+                          locale,
+                        )}
+                      </span>
+                    </div>
+
+                    <p className="sc-engine-sub">
+                      {mlData.evidenceCompleteness === "incomplete"
+                        ? locale === "bn"
+                          ? `${mlData.missingEvidencePaths.length}টি মূল্য বা খরচের তথ্য অনুপস্থিত থাকায় মোট লাভ হিসাব স্থগিত রাখা হয়েছে। অনুপস্থিত তথ্য কখনোই ৳০ ধরা হয় না।`
+                          : `Totals withheld because ${mlData.missingEvidencePaths.length} pricing or cost input(s) are missing. Missing inputs are never treated as ৳0.`
+                        : mlData.observationState === "provisional"
+                          ? locale === "bn"
+                            ? "বর্তমান হিসাবটি অস্থায়ী (প্রাক-সেটেলমেন্ট)। চূড়ান্ত কুরিয়ার ও COD চার্জ নিশ্চিত হলে পুনরায় যাচাই করুন।"
+                            : "Figures are marked provisional (pre-settlement). Confirmed margin loss is withheld until final courier/COD settlement."
+                          : locale === "bn"
+                            ? "সকল ৮টি আয় ও খরচের ক্যাটাগরি পূর্ণাঙ্গ তথ্যের ভিত্তিতে হিসাব করা হয়েছে।"
+                            : "Calculated across all 8 revenue and cost categories using exact BDT minor-unit arithmetic."}
+                    </p>
+
+                    <div className="sc-kpi-grid">
+                      <div className="sc-kpi-box">
+                        <span>
+                          {locale === "bn"
+                            ? "প্রত্যাশিত লাভ"
+                            : "Expected Profit"}
+                        </span>
+                        <strong className="sc-tabular">
+                          {mlData.totals.expectedContributionMargin
+                            ? formatMinorCurrency(
+                                mlData.totals.expectedContributionMargin
+                                  .amountMinor,
+                                evaluation.currency,
+                              )
+                            : locale === "bn"
+                              ? "স্থগিত (অসম্পূর্ণ)"
+                              : "Withheld (incomplete)"}
+                        </strong>
+                      </div>
+                      <div className="sc-kpi-box">
+                        <span>
+                          {locale === "bn"
+                            ? "প্রকৃত / চ্যাট লাভ"
+                            : "Actual / Chat Profit"}
+                        </span>
+                        <strong className="sc-tabular">
+                          {mlData.totals.observedContributionMargin
+                            ? formatMinorCurrency(
+                                mlData.totals.observedContributionMargin
+                                  .amountMinor,
+                                evaluation.currency,
+                              )
+                            : locale === "bn"
+                              ? "স্থগিত (অসম্পূর্ণ)"
+                              : "Withheld (incomplete)"}
+                        </strong>
+                      </div>
+                      <div className="sc-kpi-box" data-tone={netImpactTone}>
+                        <span>
+                          {locale === "bn"
+                            ? "লাভের ওপর প্রভাব"
+                            : "Net Profit Impact"}
+                        </span>
+                        <strong className="sc-tabular">
+                          {netImpactDisplay}
+                        </strong>
+                      </div>
+                      <div
+                        className="sc-kpi-box"
+                        data-tone={
+                          mlData.totals.leakAmount ? "adverse" : "muted"
                         }
                       >
-                        <span className="sc-impact-dot" aria-hidden="true" />
                         <span>
-                          <strong>
-                            {CATEGORY_LABELS_BILINGUAL[item.category][locale]}
-                          </strong>
-                          :{" "}
-                          {formatMinorCurrency(
-                            item.expected.amountMinor,
-                            evaluation.currency,
-                          )}{" "}
-                          →{" "}
-                          {formatMinorCurrency(
-                            item.observed.amountMinor,
-                            evaluation.currency,
-                          )}{" "}
-                          ({item.direction})
+                          {locale === "bn"
+                            ? "নিশ্চিত মার্জিন ক্ষতি"
+                            : "Confirmed Margin Loss"}
                         </span>
+                        <strong className="sc-tabular">
+                          {mlData.totals.leakAmount
+                            ? formatMinorCurrency(
+                                mlData.totals.leakAmount.amountMinor,
+                                evaluation.currency,
+                              )
+                            : mlData.observationState === "provisional"
+                              ? locale === "bn"
+                                ? "অনিশ্চিত (অস্থায়ী)"
+                                : "Unconfirmed (provisional)"
+                              : mlData.assessment === "no_leak_detected"
+                                ? formatMinorCurrency(0, evaluation.currency)
+                                : locale === "bn"
+                                  ? "হিসাবযোগ্য নয়"
+                                  : "Not calculable"}
+                        </strong>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+
+                {/* FULL 8-CATEGORY CONTRIBUTION MARGIN LEDGER */}
+                <div
+                  className="sc-ledger-card"
+                  data-testid="sc-marginleak-ledger"
+                >
+                  <div className="sc-ledger-head">
+                    <h3>{copy.ledgerTitle}</h3>
+                    <span className="sc-meta-chip">
+                      {mlData.evidenceCompleteness === "complete"
+                        ? locale === "bn"
+                          ? "৮/৮ ক্যাটাগরি সম্পূর্ণ"
+                          : "8/8 categories complete"
+                        : locale === "bn"
+                          ? `${mlData.categoryComparisons.length}/৮ ক্যাটাগরি সম্পূর্ণ`
+                          : `${mlData.categoryComparisons.length}/8 categories complete`}
+                    </span>
+                  </div>
+                  <div className="sc-ledger-table-wrap">
+                    <table className="sc-ledger-table">
+                      <thead>
+                        <tr>
+                          <th scope="col">
+                            {locale === "bn" ? "ক্যাটাগরি" : "Category"}
+                          </th>
+                          <th scope="col" className="sc-num-col">
+                            {locale === "bn" ? "প্রত্যাশিত" : "Expected"}
+                          </th>
+                          <th scope="col" className="sc-num-col">
+                            {locale === "bn"
+                              ? "চ্যাট / প্রকৃত"
+                              : "Actual / Chat"}
+                          </th>
+                          <th scope="col" className="sc-num-col">
+                            {locale === "bn"
+                              ? "মার্জিন প্রভাব"
+                              : "Margin Impact"}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {MARGIN_LEAK_FINANCIAL_CATEGORIES.map((category) => {
+                          const meta = CATEGORY_LABELS_BILINGUAL[category];
+                          const comparison = comparisonByCategory.get(category);
+                          const expectedMissing = missingPathSet.has(
+                            `/financials/${category}/expected`,
+                          );
+                          const observedMissing = missingPathSet.has(
+                            `/financials/${category}/observed`,
+                          );
+                          const formPair = reviewForm?.categories[category];
+                          const formatFallback = (val?: string) =>
+                            val && val.trim() !== ""
+                              ? `৳${Number(val).toLocaleString("en-US", {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}`
+                              : locale === "bn"
+                                ? "অনুপস্থিত"
+                                : "Missing";
+
+                          return (
+                            <tr
+                              key={category}
+                              data-direction={
+                                comparison ? comparison.direction : "missing"
+                              }
+                            >
+                              <td>
+                                <span className="sc-ledger-cat-name">
+                                  {meta[locale]}
+                                </span>
+                                <span
+                                  className="sc-ledger-role"
+                                  data-role={meta.role}
+                                >
+                                  {meta.role === "revenue"
+                                    ? locale === "bn"
+                                      ? "+ আয়"
+                                      : "+ Revenue"
+                                    : locale === "bn"
+                                      ? "− খরচ"
+                                      : "− Deduction"}
+                                </span>
+                              </td>
+                              <td
+                                className="sc-num-col sc-tabular"
+                                data-label={
+                                  locale === "bn" ? "প্রত্যাশিত" : "Expected"
+                                }
+                              >
+                                {comparison ? (
+                                  formatMinorCurrency(
+                                    comparison.expected.amountMinor,
+                                    evaluation.currency,
+                                  )
+                                ) : expectedMissing ? (
+                                  <span className="sc-missing-val">
+                                    {locale === "bn" ? "অনুপস্থিত" : "Missing"}
+                                  </span>
+                                ) : (
+                                  formatFallback(formPair?.expectedMajor)
+                                )}
+                              </td>
+                              <td
+                                className="sc-num-col sc-tabular"
+                                data-label={
+                                  locale === "bn"
+                                    ? "চ্যাট / প্রকৃত"
+                                    : "Actual / Chat"
+                                }
+                              >
+                                {comparison ? (
+                                  formatMinorCurrency(
+                                    comparison.observed.amountMinor,
+                                    evaluation.currency,
+                                  )
+                                ) : observedMissing ? (
+                                  <span className="sc-missing-val">
+                                    {locale === "bn" ? "অনুপস্থিত" : "Missing"}
+                                  </span>
+                                ) : (
+                                  formatFallback(formPair?.observedMajor)
+                                )}
+                              </td>
+                              <td
+                                className="sc-num-col sc-tabular"
+                                data-label={
+                                  locale === "bn"
+                                    ? "মার্জিন প্রভাব"
+                                    : "Margin Impact"
+                                }
+                              >
+                                {comparison ? (
+                                  <span
+                                    className="sc-impact-badge"
+                                    data-direction={comparison.direction}
+                                  >
+                                    {comparison.direction === "adverse"
+                                      ? `-${formatMinorCurrency(comparison.varianceAmount.amountMinor, evaluation.currency)}`
+                                      : comparison.direction === "favorable"
+                                        ? `+${formatMinorCurrency(comparison.varianceAmount.amountMinor, evaluation.currency)}`
+                                        : formatMinorCurrency(
+                                            0,
+                                            evaluation.currency,
+                                          )}
+                                  </span>
+                                ) : (
+                                  <span
+                                    className="sc-impact-badge"
+                                    data-direction="missing"
+                                  >
+                                    {locale === "bn"
+                                      ? "অনুপস্থিত (৳০ নয়)"
+                                      : "Missing (not ৳0)"}
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* RECOMMENDED ACTIONS */}
+                <div className="sc-actions-panel">
+                  <h3>{copy.actionsTitle}</h3>
+                  <ol className="sc-recommended-list">
+                    {evaluation.recommendedActions.map((action) => (
+                      <li key={action.code} className="sc-recommended-item">
+                        <div className="sc-recommended-top">
+                          <span className="sc-action-source-badge">
+                            #{action.priority} ·{" "}
+                            {humanizeCode(
+                              action.source,
+                              ACTION_SOURCE_LABELS,
+                              locale,
+                            )}
+                          </span>
+                          <strong>
+                            {locale === "bn" ? action.titleBn : action.titleEn}
+                          </strong>
+                        </div>
+                        <p>
+                          {locale === "bn" ? action.detailBn : action.detailEn}
+                        </p>
                       </li>
                     ))}
-                </ul>
-              ) : null}
-            </article>
-          </div>
+                  </ol>
+                </div>
 
-          {/* RECOMMENDED ACTIONS */}
-          <div className="sc-actions-panel">
-            <h3>{copy.actionsTitle}</h3>
-            <ol className="sc-recommended-list">
-              {evaluation.recommendedActions.map((action) => (
-                <li key={action.code} className="sc-recommended-item">
-                  <div className="sc-recommended-top">
-                    <span className="pg-action-priority-badge">
-                      P{action.priority} · {action.source}
-                    </span>
-                    <strong>
-                      {locale === "bn" ? action.titleBn : action.titleEn}
-                    </strong>
+                {/* INTERACTIVE HUMAN REVIEW DECISION */}
+                <div className="sc-decision-bar">
+                  <button
+                    type="button"
+                    className="pg-button pg-button-primary"
+                    onClick={() => setHumanDecision("approved")}
+                  >
+                    {copy.decisionConfirmBtn}
+                  </button>
+                  <button
+                    type="button"
+                    className="pg-button pg-button-secondary"
+                    onClick={() => setHumanDecision("follow_up")}
+                  >
+                    {copy.decisionFollowUpBtn}
+                  </button>
+                </div>
+
+                {humanDecision !== "none" ? (
+                  <div className="sc-decision-recorded" role="status">
+                    {humanDecision === "approved"
+                      ? copy.decisionConfirmedMsg
+                      : copy.decisionFollowUpMsg}
                   </div>
-                  <p>{locale === "bn" ? action.detailBn : action.detailEn}</p>
-                </li>
-              ))}
-            </ol>
-          </div>
+                ) : null}
+              </section>
+            );
+          })()
+        : null}
 
-          {/* INTERACTIVE HUMAN REVIEW DECISION */}
-          <div className="sc-decision-bar">
-            <button
-              type="button"
-              className="pg-button pg-button-primary"
-              onClick={() => setHumanDecision("approved")}
-            >
-              {copy.decisionConfirmBtn}
-            </button>
-            <button
-              type="button"
-              className="pg-button pg-button-secondary"
-              onClick={() => setHumanDecision("follow_up")}
-            >
-              {copy.decisionFollowUpBtn}
-            </button>
-          </div>
-
-          {humanDecision !== "none" ? (
-            <div className="sc-decision-recorded" role="status">
-              {humanDecision === "approved"
-                ? copy.decisionConfirmedMsg
-                : copy.decisionFollowUpMsg}
-            </div>
-          ) : null}
-        </section>
-      ) : null}
-
-      {/* ARCHITECTURE & RESPONSIBLE AI DISCLOSURE */}
+      {/* TECHNICAL AUDIT & GOVERNANCE DISCLOSURE */}
       <details className="pg-details sc-arch-details">
         <summary>{copy.archSummary}</summary>
         <div className="sc-arch-body">
           <p className="sc-arch-flow">
             <code>
-              Bangla/Banglish Chat → AI Extraction (LLM / Deterministic Parser)
-              → Strict Zod Validation &amp; Demo Catalog Grounding →
-              Deterministic PromiseGuard + MarginLeak (Integer BDT Minor Units)
-              → Mandatory Human Review
+              Bangla/Banglish Chat → Structured Extraction → Human Verification
+              → Deterministic PromiseGuard + MarginLeak (Exact BDT Minor Units)
+              → Human Approval Gate
             </code>
           </p>
+          {evaluation ? (
+            <dl className="sc-audit-dl">
+              <div>
+                <dt>Review Policy</dt>
+                <dd>
+                  <code>{evaluation.combinedReview.policyVersion}</code>
+                </dd>
+              </div>
+              {evaluation.promiseGuard ? (
+                <div>
+                  <dt>PromiseGuard Ruleset</dt>
+                  <dd>
+                    <code>
+                      {evaluation.promiseGuard.deterministic.rulesetVersion}
+                    </code>
+                  </dd>
+                </div>
+              ) : null}
+              <div>
+                <dt>MarginLeak Ruleset</dt>
+                <dd>
+                  <code>
+                    {evaluation.marginLeak.deterministic.rulesetVersion}
+                  </code>
+                </dd>
+              </div>
+              <div>
+                <dt>Trace ID</dt>
+                <dd>
+                  <code>{evaluation.metadata.traceId}</code>
+                </dd>
+              </div>
+            </dl>
+          ) : null}
           <ul>
             <li>
-              <strong>Privacy &amp; Data Sovereignty:</strong> Demonstration
+              <strong>Privacy &amp; Data Sovereignty:</strong> Sample workspace
               uses anonymized conversations with no personal phone numbers or
               street addresses. No data is persisted externally or used for
               model training.

@@ -68,7 +68,7 @@ describe("SocialCommerceWorkspace end-to-end UI flow", () => {
     // Step 2 -> Run deterministic dual evaluation
     fireEvent.click(
       screen.getByRole("button", {
-        name: /Run PromiseGuard & MarginLeak Audit/i,
+        name: /Check Fulfilment & Profit/i,
       }),
     );
 
@@ -76,24 +76,33 @@ describe("SocialCommerceWorkspace end-to-end UI flow", () => {
       expect(screen.getByTestId("sc-human-gate")).toBeInTheDocument();
     });
     expect(screen.getByTestId("sc-promiseguard-card")).toHaveTextContent(
-      /supported/i,
+      /Ready to Fulfil/i,
     );
     expect(screen.getByTestId("sc-marginleak-card")).toHaveTextContent(
-      /leak detected/i,
+      /Margin Loss Detected/i,
     );
     expect(screen.getByTestId("sc-marginleak-card")).toHaveTextContent(
-      /৳396\.00/,
+      /-৳366\.30/,
+    );
+    expect(screen.getByTestId("sc-marginleak-card")).toHaveTextContent(
+      /৳366\.30/,
+    );
+    expect(screen.getByTestId("sc-marginleak-ledger")).toHaveTextContent(
+      /8\/8 categories complete/i,
+    );
+    expect(screen.getByTestId("sc-marginleak-ledger")).toHaveTextContent(
+      /Discounts & chat concessions/i,
     );
 
     // Toggle Bangla localization
     fireEvent.click(screen.getByRole("button", { name: "বাংলা" }));
     expect(
-      screen.getByText(/সোশ্যাল-কমার্স অপারেশনস ইন্টেলিজেন্স/),
+      screen.getByText(/সোশ্যাল-কমার্স অর্ডার ওয়ার্কস্পেস/),
     ).toBeInTheDocument();
 
     // Record local human review decision
     fireEvent.click(
-      screen.getByRole("button", { name: /ক্রেতার সাথে যাচাইয়ের জন্য রাখুন/ }),
+      screen.getByRole("button", { name: /ক্রেতার উত্তরের জন্য হোল্ড করুন/ }),
     );
     expect(screen.getByRole("status")).toHaveTextContent(/হোল্ড করা হয়েছে/);
   });
@@ -113,15 +122,15 @@ describe("SocialCommerceWorkspace end-to-end UI flow", () => {
       expect(screen.getByTestId("sc-uncertainties")).toBeInTheDocument();
     });
     expect(screen.getByTestId("sc-uncertainties")).toHaveTextContent(
-      /MISSING_QUANTITY/,
+      /Order quantity was not stated/i,
     );
     expect(screen.getByTestId("sc-uncertainties")).toHaveTextContent(
-      /AMBIGUOUS_DISCOUNT/,
+      /Customer asked for a discount without an agreed BDT amount/i,
     );
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: /Run PromiseGuard & MarginLeak Audit/i,
+        name: /Check Fulfilment & Profit/i,
       }),
     );
 
@@ -129,10 +138,54 @@ describe("SocialCommerceWorkspace end-to-end UI flow", () => {
       expect(screen.getByTestId("sc-marginleak-card")).toBeInTheDocument();
     });
     expect(screen.getByTestId("sc-promiseguard-card")).toHaveTextContent(
-      /Deadline missing/i,
+      /Deadline Missing/i,
     );
     expect(screen.getByTestId("sc-marginleak-card")).toHaveTextContent(
       /Withheld \(incomplete\)/i,
+    );
+    expect(screen.getByTestId("sc-marginleak-ledger")).toHaveTextContent(
+      /Missing \(not ৳0\)/i,
+    );
+  });
+
+  it("handles custom Vitamin C Serum chat ('155 tk discnt thkbe') without inventing price or massive discount", async () => {
+    stubLocalApiFetch();
+    render(<SocialCommerceWorkspace />);
+
+    fireEvent.change(
+      screen.getByLabelText(/Customer & merchant conversation/i),
+      {
+        target: {
+          value:
+            "Customer: 5ta Vitamin C Glow Serum lagbe Mirpur e, address pore dicchi. koto discount pabo?\nMerchant: 155 tk discnt thkbe",
+        },
+      },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /Extract Structured Order/i }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("sc-uncertainties")).toBeInTheDocument();
+    });
+    expect(screen.getAllByText(/Mirpur, Dhaka/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/৳155\.00/i).length).toBeGreaterThan(0);
+    expect(document.body).not.toHaveTextContent(/৳4,595/);
+    expect(screen.getByTestId("sc-uncertainties")).toHaveTextContent(
+      /Agreed selling price was not confirmed/i,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Check Fulfilment & Profit/i }),
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId("sc-marginleak-ledger")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("sc-marginleak-card")).toHaveTextContent(
+      /Withheld \(incomplete\)/i,
+    );
+    expect(screen.getByTestId("sc-marginleak-ledger")).toHaveTextContent(
+      /-৳155\.00/,
     );
   });
 });

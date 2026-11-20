@@ -4,9 +4,9 @@ import { SiteHeader } from "../../components/site-header";
 import { SocialCommerceWorkspace } from "../../features/social-commerce/ui/social-commerce-workspace";
 
 export const metadata: Metadata = {
-  title: "Social-Commerce Operations Demo — CommerceOS (DIU AIBC 2026)",
+  title: "Order Workspace — CommerceOS",
   description:
-    "Convert Bangla, Banglish, and English Messenger/WhatsApp conversations into structured order drafts with deterministic PromiseGuard fulfilment and MarginLeak BDT margin checks.",
+    "Convert Bangla, Banglish, and English Messenger/WhatsApp conversations into verified order drafts with deterministic fulfilment readiness and BDT profit analysis.",
 };
 
 export default function SocialCommercePage() {
