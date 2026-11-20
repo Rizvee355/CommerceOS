@@ -4802,6 +4802,45 @@ li[data-tone="waiting"] .rail-dot {
   color: var(--waiting);
 }
 
+.sc-source-pill[data-tone="estimate"] {
+  background: #f3e8ff;
+  color: #6b21a8;
+}
+
+.sc-finance-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.sc-money-hint {
+  margin: -2px 0 4px;
+  font-size: 0.78rem;
+  color: var(--ink-500);
+  line-height: 1.4;
+}
+
+.sc-engine-tz-meta {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--ink-900);
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.sc-raw-json-wrap {
+  margin: 12px 0;
+}
+
+.governance-registry-note {
+  margin: 0 0 10px;
+  font-size: 0.82rem;
+  color: var(--ink-500);
+}
+
 .sc-reason-pill {
   display: inline-flex;
   align-items: center;

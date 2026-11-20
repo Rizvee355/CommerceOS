@@ -166,7 +166,7 @@ export const socialCommerceEvaluateRequestSchema = z.strictObject({
   channel: socialCommerceChannelSchema,
   currency: currencyCodeSchema,
   productSummary: z.string().trim().min(1).max(200),
-  quantity: z.number().int().min(1).max(1_000),
+  quantity: z.number().int().min(1).max(1_000).nullable(),
   unresolvedExtractionFields: z.array(z.string().trim().min(1).max(64)).max(16),
   fulfillment: z.strictObject({
     dispatchByUtc: utcTimestampSchema.nullable(),

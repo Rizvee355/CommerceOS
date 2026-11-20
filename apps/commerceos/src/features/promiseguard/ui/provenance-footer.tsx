@@ -2,7 +2,7 @@
 
 import type { PromiseGuardEvaluationResponse } from "@commerceos/contracts";
 import { useState } from "react";
-import { formatUtc } from "./format";
+import { formatDhaka, formatUtc } from "./format";
 
 export type ProvenanceFooterProps = {
   response: PromiseGuardEvaluationResponse;
@@ -58,13 +58,19 @@ export const ProvenanceFooter = ({ response }: ProvenanceFooterProps) => {
         </div>
 
         <div className="pg-provenance-item">
-          <span className="pg-meta-label">Received (UTC)</span>
-          <span>{formatUtc(response.metadata.receivedAt)}</span>
+          <span className="pg-meta-label">Received (Bangladesh / UTC)</span>
+          <span>
+            {formatDhaka(response.metadata.receivedAt)} ·{" "}
+            <code>{formatUtc(response.metadata.receivedAt)}</code>
+          </span>
         </div>
 
         <div className="pg-provenance-item">
-          <span className="pg-meta-label">Responded (UTC)</span>
-          <span>{formatUtc(response.metadata.respondedAt)}</span>
+          <span className="pg-meta-label">Responded (Bangladesh / UTC)</span>
+          <span>
+            {formatDhaka(response.metadata.respondedAt)} ·{" "}
+            <code>{formatUtc(response.metadata.respondedAt)}</code>
+          </span>
         </div>
 
         <div className="pg-provenance-item">

@@ -25,8 +25,8 @@ export const AssessmentBanner = ({
   deterministic,
 }: AssessmentBannerProps) => {
   const presentation = assessmentPresentation[assessment];
-  const { data, rulesetVersion } = deterministic;
-  const summary = `Evaluated against ruleset ${rulesetVersion} with ${data.findings.length} operational finding${data.findings.length === 1 ? "" : "s"}.`;
+  const { data } = deterministic;
+  const summary = `Checked ${data.findings.length} operational readiness signal${data.findings.length === 1 ? "" : "s"} against deterministic dispatch rules.`;
 
   return (
     <div
@@ -48,7 +48,7 @@ export const AssessmentBanner = ({
             data-envelope={analysisStatus}
             title={analysisStatusExplanation[analysisStatus]}
           >
-            Envelope: {analysisStatusCopy[analysisStatus]}
+            Status: {analysisStatusCopy[analysisStatus]}
           </span>
         </div>
 

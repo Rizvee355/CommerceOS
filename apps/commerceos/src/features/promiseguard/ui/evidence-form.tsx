@@ -1,7 +1,7 @@
 import type { FormEvent, Ref } from "react";
 
 import { CheckboxField, SelectField, TextField, UtcField } from "./form-fields";
-import { formatUtc } from "./format";
+import { formatDhaka, formatUtc } from "./format";
 import {
   blockerCodes,
   fieldDomId,
@@ -80,7 +80,7 @@ function TimesFields({
       <UtcField
         fieldKey={`${group}.observedAt`}
         label="Observed at"
-        hint={`When this ${noun} was observed. Read as UTC.`}
+        hint={`When this ${noun} was observed (Bangladesh time, UTC+6).`}
         error={errors[`${group}.observedAt`]}
         value={times.observedAt}
         disabled={disabled}
@@ -90,7 +90,7 @@ function TimesFields({
         <UtcField
           fieldKey={`${group}.validUntil`}
           label="Valid until"
-          hint="After this time the evidence is treated as expired. Read as UTC."
+          hint="After this time the evidence is treated as expired (Bangladesh time, UTC+6)."
           error={errors[`${group}.validUntil`]}
           value={times.validUntil}
           disabled={disabled || times.validityUnknown}
@@ -173,11 +173,10 @@ export function EvidenceForm({
       </header>
 
       <p className="pg-notice" data-tone="synthetic">
-        <strong>Synthetic data only.</strong> Scenario{" "}
-        <code>{draft.scenarioId}</code>. Evidence origin is fixed to
-        &ldquo;synthetic fixture&rdquo;.
+        <strong>Sample scenario data.</strong> Scenario{" "}
+        <code>{draft.scenarioId}</code>.
         {serverTime
-          ? ` Times were generated from the server clock at ${formatUtc(serverTime)}.`
+          ? ` Preset times were generated from the server clock at ${formatDhaka(serverTime)}.`
           : ""}
       </p>
 
@@ -186,7 +185,7 @@ export function EvidenceForm({
         <TextField
           fieldKey="fulfillmentRef"
           label="Fulfillment reference"
-          hint="An opaque reference for this synthetic fulfillment."
+          hint="An opaque reference for this sample order."
           error={errors.fulfillmentRef}
           value={draft.fulfillmentRef}
           onChange={(fulfillmentRef) => onChange({ ...draft, fulfillmentRef })}
@@ -194,7 +193,7 @@ export function EvidenceForm({
         <UtcField
           fieldKey="dispatchBy"
           label="Dispatch by"
-          hint="The merchant's dispatch commitment. Read as UTC."
+          hint="The merchant's dispatch commitment in Bangladesh time (UTC+6). Converted to UTC on submission."
           error={errors.dispatchBy}
           value={draft.commitment.dispatchBy}
           onChange={(dispatchBy) =>
@@ -327,7 +326,7 @@ export function EvidenceForm({
             <UtcField
               fieldKey="estimate.estimatedReadyAt"
               label="Estimated ready at"
-              hint="When fulfillment is expected to be ready. An estimate is not a dispatch guarantee. Read as UTC."
+              hint="When fulfillment is expected to be ready in Bangladesh time (UTC+6). An estimate is not a dispatch guarantee."
               error={errors["estimate.estimatedReadyAt"]}
               value={draft.estimate.estimatedReadyAt}
               onChange={(estimatedReadyAt) =>
@@ -347,8 +346,16 @@ export function EvidenceForm({
       </fieldset>
 
       <details className="pg-details">
-        <summary>Technical details: evidence identifiers</summary>
+        <summary>
+          Technical details: evidence identifiers &amp; UTC clock
+        </summary>
         <dl className="pg-dl">
+          {serverTime ? (
+            <div>
+              <dt>Server clock (UTC)</dt>
+              <dd>{formatUtc(serverTime)}</dd>
+            </div>
+          ) : null}
           <div>
             <dt>Commitment</dt>
             <dd>{draft.commitment.evidenceId}</dd>

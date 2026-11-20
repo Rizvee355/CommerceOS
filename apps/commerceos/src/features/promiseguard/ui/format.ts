@@ -1,17 +1,10 @@
-const utcFormatter = new Intl.DateTimeFormat("en-GB", {
-  timeZone: "UTC",
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-  hourCycle: "h23",
-});
+import {
+  formatDhakaDateTime,
+  formatUtcDateTime,
+} from "../../../lib/dhaka-time";
 
-/** Formats an RFC 3339 UTC timestamp for display, always labeled as UTC. */
-export const formatUtc = (iso: string): string => {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime())
-    ? iso
-    : `${utcFormatter.format(date)} UTC`;
-};
+/** Formats an RFC 3339 UTC timestamp for technical diagnostics, labeled as UTC. */
+export const formatUtc = formatUtcDateTime;
+
+/** Formats an RFC 3339 UTC timestamp for merchant display in Bangladesh time (UTC+6). */
+export const formatDhaka = formatDhakaDateTime;

@@ -124,7 +124,7 @@ export function SelectField<T extends string>(props: {
   );
 }
 
-/** A date-time control whose digits are read and written as UTC. */
+/** A date-time control whose digits are entered and displayed in Bangladesh time (Asia/Dhaka, UTC+6). */
 export function UtcField(props: {
   fieldKey: FieldKey;
   label: string;
@@ -140,10 +140,13 @@ export function UtcField(props: {
       fieldKey={fieldKey}
       label={
         <>
-          {label} <span className="pg-utc-badge">UTC</span>
+          {label} <span className="pg-utc-badge">Bangladesh time (UTC+6)</span>
         </>
       }
-      hint={hint ?? "Read as UTC, not your local time zone."}
+      hint={
+        hint ??
+        "Entered in Bangladesh time (UTC+6) and converted to UTC automatically."
+      }
       error={error}
     >
       {(aria) => (
