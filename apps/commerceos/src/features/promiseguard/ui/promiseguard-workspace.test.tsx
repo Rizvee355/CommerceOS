@@ -247,7 +247,7 @@ describe("PromiseGuardWorkspace regression and safety suite", () => {
 
       // Error banner appears and form submission is disabled
       expect(await screen.findByTestId("clock-sync-error")).toBeInTheDocument();
-      const submitBtn = screen.getByRole("button", { name: /Analyzing…/i });
+      const submitBtn = screen.getByRole("button", { name: /Syncing clock…/i });
       expect(submitBtn).toBeDisabled();
 
       // 3. User clicks Retry Clock Synchronization -> succeeds and loads Preset 2 (FUL-SYN-002)

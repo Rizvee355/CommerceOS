@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { moduleRegistry } from "../features/module-registry";
 
-export type NavigationSurface = "overview" | "promiseguard";
+export type NavigationSurface = "overview" | "promiseguard" | "social-commerce";
 
 const titleCase = (value: string): string =>
   `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
@@ -39,6 +39,18 @@ export function SiteHeader({ current }: { current: NavigationSurface }) {
               aria-current={current === "overview" ? "page" : undefined}
             >
               Overview
+            </Link>
+          </li>
+          <li>
+            <Link
+              className="nav-item"
+              href="/social-commerce"
+              aria-current={current === "social-commerce" ? "page" : undefined}
+            >
+              Social Commerce
+              <span className="nav-tag" data-tone="preview">
+                DIU Demo
+              </span>
             </Link>
           </li>
           <li>
